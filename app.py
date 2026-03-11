@@ -429,6 +429,54 @@ def api_showings_by_prop():
         return jsonify({"error": str(e)}), 500
 
 
+@app.route("/api/showings/from-calendar", methods=["POST"])
+def api_showings_from_calendar():
+    """
+    服務間 API：行事曆儲存帶看行程後呼叫，自動新增帶看紀錄。
+    用共享 secret（FLASK_SECRET_KEY）驗證，不需 session。
+    body: {
+      secret, buyer_id, buyer_name,
+      prop_id, prop_name, prop_address,
+      date,          # YYYY-MM-DD
+      calendar_event_id,  # 行事曆行程 ID，方便反查
+      note
+    }
+    """
+    _secret_key = os.environ.get("FLASK_SECRET_KEY", "")
+    data = request.get_json(force=True) or {}
+
+    # 驗證共享 secret
+    if not _secret_key or data.get("secret") != _secret_key:
+        return jsonify({"error": "未授權"}), 401
+
+    buyer_id = str(data.get("buyer_id", "")).strip()
+    if not buyer_id:
+        return jsonify({"error": "缺少 buyer_id"}), 400
+
+    db = _get_db()
+    if db is None:
+        return jsonify({"error": "Firestore 未連線"}), 503
+    try:
+        doc = {
+            "buyer_id":          buyer_id,
+            "buyer_name":        str(data.get("buyer_name", "")).strip(),
+            "prop_id":           str(data.get("prop_id", "")).strip(),
+            "prop_name":         str(data.get("prop_name", "")).strip(),
+            "prop_address":      str(data.get("prop_address", "")).strip(),
+            "date":              str(data.get("date", _now_str()[:10])).strip(),
+            "reaction":          "",        # 帶看反應待事後填寫
+            "note":              str(data.get("note", "")).strip(),
+            "calendar_event_id": str(data.get("calendar_event_id", "")).strip(),
+            "created_by":        "calendar-service",   # 標記來源
+            "created_at":        _now_str(),
+        }
+        ref = db.collection("showings").document()
+        ref.set(doc)
+        return jsonify({"ok": True, "id": ref.id})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
 @app.route("/api/showings", methods=["GET"])
 def api_showings_list():
     """列出帶看紀錄。可依 buyer_id 或 prop_id 篩選。"""
