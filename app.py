@@ -981,6 +981,7 @@ label{font-size:.8rem;color:var(--txs);display:block;margin-bottom:.25rem;}
     <a href="javascript:void(0)" id="sb-library" class="hidden">📁 物件庫</a>
     <a href="#" class="active">👥 買方管理</a>
     <a href="javascript:void(0)" id="sb-survey" class="hidden">📍 周邊調查</a>
+    <a href="javascript:void(0)" id="sb-calendar" class="hidden">📅 業務行事曆</a>
   </nav>
   <div class="sb-user">
     <button type="button" onclick="buyerToggleDropdown(event)">
@@ -1043,6 +1044,10 @@ label{font-size:.8rem;color:var(--txs);display:block;margin-bottom:.25rem;}
   <a href="javascript:void(0)" id="tb-survey" class="buyer-tb-item hidden">
     <span style="font-size:1.3rem;">📍</span>
     <span>周邊</span>
+  </a>
+  <a href="javascript:void(0)" id="tb-calendar" class="buyer-tb-item hidden">
+    <span style="font-size:1.3rem;">📅</span>
+    <span>行事曆</span>
   </a>
 </nav>
 
@@ -2494,6 +2499,11 @@ function _setAvatar(ids, picUrl, name) {
     if (sbAd) { sbAd.href = portalBase + '/api/enter/post'; sbAd.target = 'tool-post'; sbAd.classList.remove('hidden'); }
     var sbSurvey = document.getElementById('sb-survey');
     if (sbSurvey) { sbSurvey.href = portalBase + '/api/enter/survey'; sbSurvey.target = 'tool-survey'; sbSurvey.classList.remove('hidden'); }
+    // 業務行事曆
+    var tbCalendar = document.getElementById('tb-calendar');
+    if (tbCalendar) { tbCalendar.href = portalBase + '/api/enter/calendar'; tbCalendar.target = 'tool-calendar'; tbCalendar.classList.remove('hidden'); }
+    var sbCalendar = document.getElementById('sb-calendar');
+    if (sbCalendar) { sbCalendar.href = portalBase + '/api/enter/calendar'; sbCalendar.target = 'tool-calendar'; sbCalendar.classList.remove('hidden'); }
   }
   // Portal 衍生連結（升級/帳號/後台）
   if (PORTAL_URL_SB && PORTAL_URL_SB !== '/') {
