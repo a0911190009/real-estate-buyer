@@ -182,10 +182,9 @@ def auth_portal_login():
     session["user_name"]  = payload.get("name", "")
     session["user_picture"] = payload.get("picture", "")
     session.modified = True
-    return """<!DOCTYPE html><html><head><meta charset="utf-8">
-<meta http-equiv="refresh" content="0;url=/">
-<script>window.location.replace("/");</script>
-</head><body></body></html>"""
+    # 直接 render 首頁（不做任何 redirect），Set-Cookie 與 HTML 在同一個 response
+    # 避免 Chrome SameSite 問題：跨站 redirect 後瀏覽器帶不到剛設的 cookie
+    return _render_index(email)
 
 
 @app.route("/auth/logout", methods=["POST"])
@@ -771,24 +770,17 @@ def api_war_delete(war_id):
 #  主頁（回傳 HTML）
 # ══════════════════════════════════════════
 
-@app.route("/")
-def index():
-    email, err = _require_user()
-    if err:
-        # 未登入 → 導回 Portal
-        return redirect(PORTAL_URL or "/auth/portal-login")
-
-    is_admin    = _is_admin(email)
-    user_name   = session.get("user_name", email)
+def _render_index(email):
+    """產生並回傳買方管理首頁 HTML（供 index 和 auth_portal_login 共用）。"""
+    is_admin     = _is_admin(email)
+    user_name    = session.get("user_name", email)
     user_picture = session.get("user_picture", "")
-    portal_url  = PORTAL_URL or "/"
-    library_url = LIBRARY_URL or ""
-
+    portal_url   = PORTAL_URL or "/"
+    library_url  = LIBRARY_URL or ""
     IS_ADMIN_JSON = json.dumps(is_admin)
-    role_label = "管理員" if is_admin else "業務"
-    badge_class = "admin" if is_admin else "points"
-    initial = (user_name or user_picture or "?")[0].upper()
-
+    role_label   = "管理員" if is_admin else "業務"
+    badge_class  = "admin" if is_admin else "points"
+    initial      = (user_name or user_picture or "?")[0].upper()
     html = (HTML_TEMPLATE
         .replace('__AVATAR__',      user_picture)
         .replace('__INITIAL__',     initial)
@@ -800,6 +792,14 @@ def index():
         .replace('__IS_ADMIN__',    IS_ADMIN_JSON)
     )
     return html, 200, {'Content-Type': 'text/html; charset=utf-8'}
+
+
+@app.route("/")
+def index():
+    email, err = _require_user()
+    if err:
+        return redirect(PORTAL_URL or "/auth/portal-login")
+    return _render_index(email)
 
 
 # ══════════════════════════════════════════
