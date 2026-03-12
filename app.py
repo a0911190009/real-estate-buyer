@@ -69,8 +69,18 @@ app.config["SESSION_COOKIE_SECURE"] = True
 PORTAL_URL      = (os.environ.get("PORTAL_URL") or "").strip()
 LIBRARY_URL     = (os.environ.get("LIBRARY_URL") or "").strip()
 ADMIN_EMAILS    = [e.strip() for e in (os.environ.get("ADMIN_EMAILS") or "").split(",") if e.strip()]
+SERVICE_API_KEY = (os.environ.get("SERVICE_API_KEY") or "").strip()
 TOKEN_SERIALIZER = URLSafeTimedSerializer(app.secret_key)
 TOKEN_MAX_AGE   = 300  # 5 分鐘，容忍 Cloud Run cold start
+
+
+def _verify_service_key():
+    """驗證 X-Service-Key header 與 SERVICE_API_KEY 一致。"""
+    import hmac as _hmac
+    if not SERVICE_API_KEY:
+        return False
+    key = request.headers.get("X-Service-Key", "")
+    return _hmac.compare_digest(key, SERVICE_API_KEY)
 
 
 def _is_admin(email):
@@ -429,6 +439,39 @@ def api_showings_by_prop():
             })
         items.sort(key=lambda x: x.get("date", ""), reverse=True)
         return jsonify({"items": items})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route("/api/buyers/list-for-agent", methods=["GET"])
+def api_buyers_list_for_agent():
+    """Agent 專用：以 X-Service-Key 列出指定用戶的買方清單（簡化版）。
+    Query: email=xxx（必填）"""
+    if not _verify_service_key():
+        return jsonify({"error": "需要有效的 X-Service-Key"}), 401
+    email = (request.args.get("email") or "").strip()
+    if not email or "@" not in email:
+        return jsonify({"error": "缺少有效的 email"}), 400
+    db = _get_db()
+    if db is None:
+        return jsonify({"items": []})
+    try:
+        docs = db.collection("buyers").where("created_by", "==", email).stream()
+        items = []
+        for d in docs:
+            item = d.to_dict()
+            items.append({
+                "id": d.id,
+                "name": item.get("name", ""),
+                "phone": item.get("phone", ""),
+                "budget_min": item.get("budget_min", ""),
+                "budget_max": item.get("budget_max", ""),
+                "area_pref": item.get("area_pref", ""),
+                "notes": item.get("notes", ""),
+                "created_at": item.get("created_at", ""),
+            })
+        items.sort(key=lambda x: x.get("created_at", ""), reverse=True)
+        return jsonify({"items": items[:20]})  # 最多回傳 20 筆
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
