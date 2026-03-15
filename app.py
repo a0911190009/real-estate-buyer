@@ -8,6 +8,7 @@ Firestore 集合：
   showings/     帶看紀錄（buyer_id × prop_id 橋接）
 """
 
+# favicon 已更新為透明版 (static/favicon.png)
 import os
 import json
 import uuid
