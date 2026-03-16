@@ -9,4 +9,4 @@ COPY . .
 
 EXPOSE 8080
 
-CMD exec gunicorn --bind :${PORT:-8080} --workers 1 --threads 8 --worker-class gthread --timeout 120 app:app
+CMD exec gunicorn --bind :${PORT:-8080} --workers 2 --worker-class sync --timeout 60 app:app
