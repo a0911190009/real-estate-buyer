@@ -1022,16 +1022,16 @@ label{font-size:.8rem;color:var(--txs);display:block;margin-bottom:.25rem;}
 <!-- ── 桌機左側 Sidebar ── -->
 <aside id="app-sidebar">
   <div class="sb-logo">
-    <span style="font-size:1.3rem;">👥</span>
+    <img src="/static/tool-buyer.png" alt="" style="width:22px;height:22px;object-fit:contain;">
     <span>買方管理</span>
   </div>
   <nav>
-    <a href="__PORTAL_URL__" target="tool-portal" id="sb-portal-home">🏠 工具首頁</a>
-    <a href="javascript:void(0)" id="sb-ad" class="hidden">📝 廣告文案</a>
-    <a href="javascript:void(0)" id="sb-library" class="hidden">📁 物件庫</a>
-    <a href="#" class="active">👥 買方管理</a>
-    <a href="javascript:void(0)" id="sb-survey" class="hidden">📍 周邊調查</a>
-    <a href="javascript:void(0)" id="sb-calendar" class="hidden">📅 業務行事曆</a>
+    <a href="__PORTAL_URL__" target="tool-portal" id="sb-portal-home"><img src="/static/tool-reels.png" alt="" style="width:18px;height:18px;object-fit:contain;vertical-align:middle;margin-right:8px;"> 工具首頁</a>
+    <a href="javascript:void(0)" id="sb-ad" class="hidden"><img src="/static/tool-ad.png" alt="" style="width:18px;height:18px;object-fit:contain;vertical-align:middle;margin-right:8px;"> 廣告文案</a>
+    <a href="javascript:void(0)" id="sb-library" class="hidden"><img src="/static/tool-library.png" alt="" style="width:18px;height:18px;object-fit:contain;vertical-align:middle;margin-right:8px;"> 物件庫</a>
+    <a href="#" class="active"><img src="/static/tool-buyer.png" alt="" style="width:18px;height:18px;object-fit:contain;vertical-align:middle;margin-right:8px;"> 買方管理</a>
+    <a href="javascript:void(0)" id="sb-survey" class="hidden"><img src="/static/tool-survey.png" alt="" style="width:18px;height:18px;object-fit:contain;vertical-align:middle;margin-right:8px;"> 周邊調查</a>
+    <a href="javascript:void(0)" id="sb-calendar" class="hidden"><img src="/static/tool-calendar.png" alt="" style="width:18px;height:18px;object-fit:contain;vertical-align:middle;margin-right:8px;"> 業務行事曆</a>
   </nav>
   <div class="sb-user">
     <button type="button" onclick="buyerToggleDropdown(event)">
@@ -1076,27 +1076,27 @@ label{font-size:.8rem;color:var(--txs);display:block;margin-bottom:.25rem;}
 <!-- ── 手機底部 Tab Bar（仿 Portal 固定顯示所有工具） ── -->
 <nav id="buyer-tab-bar">
   <a href="__PORTAL_URL__" id="tb-home" class="buyer-tb-item">
-    <span style="font-size:1.25rem;">🏠</span>
+    <img src="/static/tool-reels.png" alt="" style="width:24px;height:24px;object-fit:contain;">
     <span>首頁</span>
   </a>
   <a href="javascript:void(0)" id="tb-ad" class="buyer-tb-item">
-    <span style="font-size:1.25rem;">📝</span>
+    <img src="/static/tool-ad.png" alt="" style="width:24px;height:24px;object-fit:contain;">
     <span>廣告</span>
   </a>
   <a href="javascript:void(0)" id="tb-library" class="buyer-tb-item">
-    <span style="font-size:1.25rem;">📁</span>
+    <img src="/static/tool-library.png" alt="" style="width:24px;height:24px;object-fit:contain;">
     <span>物件庫</span>
   </a>
   <a href="#" class="buyer-tb-item buyer-tb-active">
-    <span style="font-size:1.25rem;">👥</span>
+    <img src="/static/tool-buyer.png" alt="" style="width:24px;height:24px;object-fit:contain;">
     <span>買方</span>
   </a>
   <a href="javascript:void(0)" id="tb-survey" class="buyer-tb-item">
-    <span style="font-size:1.25rem;">📍</span>
+    <img src="/static/tool-survey.png" alt="" style="width:24px;height:24px;object-fit:contain;">
     <span>周邊</span>
   </a>
   <a href="javascript:void(0)" id="tb-calendar" class="buyer-tb-item">
-    <span style="font-size:1.25rem;">📅</span>
+    <img src="/static/tool-calendar.png" alt="" style="width:24px;height:24px;object-fit:contain;">
     <span>行事曆</span>
   </a>
 </nav>
