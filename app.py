@@ -2243,8 +2243,7 @@ function buyerDetail(id) {
     html += '</div>';
 
     // ── 互動記事區塊 ──
-    html += '<div class="mt-6 border-t pt-4" style="border-color:var(--bd);">'
-      + '<div class="flex items-center justify-between mb-3">'
+    html += '<div class="flex items-center justify-between mb-3" style="margin-top:1.5rem;border-top:1px solid var(--bd);padding-top:1rem;">'
       + '<h4 class="font-semibold text-sm" style="color:var(--tx);">📞 互動記事（' + contacts.length + ' 筆）</h4>'
       + '<button class="btn-primary text-xs py-1 px-3" onclick="contactOpenNew(\'' + esc(id) + '\')">＋ 新增記事</button>'
       + '</div>';
@@ -2259,7 +2258,7 @@ function buyerDetail(id) {
           + '<div class="text-xs" style="color:var(--txs);">⏰ ' + esc(c.contact_at) + '</div>'
           + '<p class="text-sm mt-1" style="color:var(--tx);">' + esc(c.content) + '</p>'
           + '</div>'
-          + '<div class="flex gap-1.5 flex-shrink-0 ml-2">'
+          + '<div class="flex gap-1.5 flex-shrink-0">'
           + '<button class="text-xs px-2 py-1 rounded border transition" style="color:var(--ac);border-color:var(--bd);" '
           +   'data-content="' + esc(c.content) + '" data-contact-at="' + esc(c.contact_at) + '" '
           +   'onclick="contactOpenEdit(\'' + esc(c.id) + '\',\'' + esc(id) + '\')">編輯</button>'
@@ -2269,7 +2268,6 @@ function buyerDetail(id) {
       });
       html += '</div>';
     }
-    html += '</div>';
 
     content.innerHTML = html;
   });
