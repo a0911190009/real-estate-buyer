@@ -3009,7 +3009,7 @@ function _setAvatar(ids, picUrl, name) {
 // ── Sidebar 工具函數 ──
 (function() {
   var LIBRARY_URL_SB = __LIBRARY_URL__;
-  var PORTAL_URL_SB  = '__PORTAL_URL__';
+  var PORTAL_URL_SB  = '__PORTAL_URL__';  // 這裡被後端替換成實際 URL
   var IS_ADMIN_SB    = __IS_ADMIN__;
 
   // 物件庫連結（sidebar，直接連）
