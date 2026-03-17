@@ -390,9 +390,28 @@ def api_buyer_update(buyer_id):
         return jsonify({"error": str(e)}), 500
 
 
+def _recalc_last_contact(db, buyer_id):
+    """重新計算買方的最後追蹤時間（from buyer_contacts）。"""
+    try:
+        contacts = db.collection("buyer_contacts").where("buyer_id", "==", buyer_id).stream()
+        items = [d.to_dict() for d in contacts]
+        if not items:
+            # 無任何記事時，清空 last_contact_at
+            db.collection("buyers").document(buyer_id).update({"last_contact_at": None})
+            return None
+        # 取最大的 contact_at（字串比較即可）
+        max_contact = max(items, key=lambda x: x.get("contact_at", ""))
+        last_contact_at = max_contact.get("contact_at")
+        db.collection("buyers").document(buyer_id).update({"last_contact_at": last_contact_at})
+        return last_contact_at
+    except Exception:
+        # 出錯就跳過重新計算
+        pass
+
+
 @app.route("/api/buyers/<buyer_id>", methods=["DELETE"])
 def api_buyer_delete(buyer_id):
-    """刪除買方（同時刪除其帶看紀錄）。"""
+    """刪除買方（同時刪除其帶看紀錄與互動記事）。"""
     email, err = _require_user()
     if err:
         return jsonify({"error": err[0]}), err[1]
@@ -411,7 +430,180 @@ def api_buyer_delete(buyer_id):
         showings = db.collection("showings").where("buyer_id", "==", buyer_id).stream()
         for s in showings:
             s.reference.delete()
+        # 同步刪除互動記事
+        contacts = db.collection("buyer_contacts").where("buyer_id", "==", buyer_id).stream()
+        for c in contacts:
+            c.reference.delete()
         ref.delete()
+        return jsonify({"ok": True})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+# ══════════════════════════════════════════
+#  互動記事（buyer_contacts 集合）
+# ══════════════════════════════════════════
+
+@app.route("/api/buyers/<buyer_id>/contacts", methods=["GET"])
+def api_contacts_list(buyer_id):
+    """取得買方的所有互動記事。"""
+    email, err = _require_user()
+    if err:
+        return jsonify({"error": err[0]}), err[1]
+    db = _get_db()
+    if db is None:
+        return jsonify({"error": "Firestore 未連線"}), 503
+    try:
+        # 驗證該買方權限
+        buyer_ref = db.collection("buyers").document(buyer_id).get()
+        if not buyer_ref.exists:
+            return jsonify({"error": "找不到此買方"}), 404
+        buyer_item = buyer_ref.to_dict()
+        if not _is_admin(email) and buyer_item.get("created_by") != email:
+            return jsonify({"error": "無權限"}), 403
+
+        # 查詢該買方的所有互動記事
+        docs = db.collection("buyer_contacts").where("buyer_id", "==", buyer_id).stream()
+        items = []
+        for d in docs:
+            item = d.to_dict()
+            items.append({
+                "id": d.id,
+                "buyer_id": item.get("buyer_id"),
+                "content": item.get("content"),
+                "contact_at": item.get("contact_at"),
+                "created_by": item.get("created_by"),
+                "created_at": item.get("created_at"),
+            })
+        # 按 contact_at 降冪排序（最新的在前）
+        items.sort(key=lambda x: x.get("contact_at", ""), reverse=True)
+        return jsonify({"items": items})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route("/api/buyers/<buyer_id>/contacts", methods=["POST"])
+def api_contact_create(buyer_id):
+    """新增互動記事。"""
+    email, err = _require_user()
+    if err:
+        return jsonify({"error": err[0]}), err[1]
+    db = _get_db()
+    if db is None:
+        return jsonify({"error": "Firestore 未連線"}), 503
+    try:
+        # 驗證該買方權限
+        buyer_ref = db.collection("buyers").document(buyer_id).get()
+        if not buyer_ref.exists:
+            return jsonify({"error": "找不到此買方"}), 404
+        buyer_item = buyer_ref.to_dict()
+        if not _is_admin(email) and buyer_item.get("created_by") != email:
+            return jsonify({"error": "無權限"}), 403
+
+        data = request.get_json(force=True) or {}
+        content = str(data.get("content", "")).strip()
+        if not content:
+            return jsonify({"error": "請填寫互動內容"}), 400
+
+        contact_at = (data.get("contact_at") or "").strip()
+        if not contact_at:
+            contact_at = _now_str()
+
+        doc = {
+            "buyer_id": buyer_id,
+            "content": content,
+            "contact_at": contact_at,
+            "created_by": email,
+            "created_at": _now_str(),
+        }
+        ref = db.collection("buyer_contacts").document()
+        ref.set(doc)
+
+        # 重新計算 last_contact_at
+        _recalc_last_contact(db, buyer_id)
+
+        return jsonify({"ok": True, "id": ref.id, **doc}), 201
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route("/api/buyers/<buyer_id>/contacts/<contact_id>", methods=["PUT"])
+def api_contact_update(buyer_id, contact_id):
+    """修改互動記事。"""
+    email, err = _require_user()
+    if err:
+        return jsonify({"error": err[0]}), err[1]
+    db = _get_db()
+    if db is None:
+        return jsonify({"error": "Firestore 未連線"}), 503
+    try:
+        # 驗證該買方權限
+        buyer_ref = db.collection("buyers").document(buyer_id).get()
+        if not buyer_ref.exists:
+            return jsonify({"error": "找不到此買方"}), 404
+        buyer_item = buyer_ref.to_dict()
+        if not _is_admin(email) and buyer_item.get("created_by") != email:
+            return jsonify({"error": "無權限"}), 403
+
+        # 取得現有記事
+        contact_ref = db.collection("buyer_contacts").document(contact_id).get()
+        if not contact_ref.exists:
+            return jsonify({"error": "找不到此記事"}), 404
+        contact_item = contact_ref.to_dict()
+
+        # 驗證記事權限
+        if not _is_admin(email) and contact_item.get("created_by") != email:
+            return jsonify({"error": "無權限"}), 403
+
+        data = request.get_json(force=True) or {}
+        update = {
+            "content": str(data.get("content", contact_item.get("content", ""))).strip(),
+            "contact_at": (data.get("contact_at") or contact_item.get("contact_at", "")).strip(),
+        }
+
+        db.collection("buyer_contacts").document(contact_id).update(update)
+
+        # 重新計算 last_contact_at
+        _recalc_last_contact(db, buyer_id)
+
+        return jsonify({"ok": True, "id": contact_id, **update})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route("/api/buyers/<buyer_id>/contacts/<contact_id>", methods=["DELETE"])
+def api_contact_delete(buyer_id, contact_id):
+    """刪除互動記事。"""
+    email, err = _require_user()
+    if err:
+        return jsonify({"error": err[0]}), err[1]
+    db = _get_db()
+    if db is None:
+        return jsonify({"error": "Firestore 未連線"}), 503
+    try:
+        # 驗證該買方權限
+        buyer_ref = db.collection("buyers").document(buyer_id).get()
+        if not buyer_ref.exists:
+            return jsonify({"error": "找不到此買方"}), 404
+        buyer_item = buyer_ref.to_dict()
+        if not _is_admin(email) and buyer_item.get("created_by") != email:
+            return jsonify({"error": "無權限"}), 403
+
+        # 取得現有記事
+        contact_ref = db.collection("buyer_contacts").document(contact_id).get()
+        if not contact_ref.exists:
+            return jsonify({"error": "找不到此記事"}), 404
+        contact_item = contact_ref.to_dict()
+
+        # 驗證記事權限
+        if not _is_admin(email) and contact_item.get("created_by") != email:
+            return jsonify({"error": "無權限"}), 403
+
+        db.collection("buyer_contacts").document(contact_id).delete()
+
+        # 重新計算 last_contact_at
+        _recalc_last_contact(db, buyer_id)
+
         return jsonify({"ok": True})
     except Exception as e:
         return jsonify({"error": str(e)}), 500
@@ -1147,6 +1339,8 @@ label{font-size:.8rem;color:var(--txs);display:block;margin-bottom:.25rem;}
     </select>
     <select id="buyer-sort" onchange="buyerFilter()" style="width:auto" title="排序方式">
       <option value="war_first">⚔️ 斡旋優先</option>
+      <option value="contact_desc">📞 最後追蹤 新→舊</option>
+      <option value="contact_asc">📞 最後追蹤 舊→新</option>
       <option value="updated_desc">更新日 新→舊</option>
       <option value="updated_asc">更新日 舊→新</option>
       <option value="created_desc">建立日 新→舊</option>
@@ -1223,8 +1417,19 @@ label{font-size:.8rem;color:var(--txs);display:block;margin-bottom:.25rem;}
       <input id="bm-area" type="text" placeholder="如：台東市、知本、關山">
     </div>
     <div class="mb-3">
-      <label>物件類型（可複選，逗號分隔）</label>
-      <input id="bm-types" type="text" placeholder="如：農地、建地、店住">
+      <label>物件類型（可複選）</label>
+      <!-- Tag 容器 + 輸入框 -->
+      <div id="bm-types-container" style="border:1px solid var(--bd);border-radius:8px;padding:8px;background:var(--bg-p);cursor:text;position:relative;display:flex;flex-wrap:wrap;gap:4px;align-items:center;min-height:40px;">
+        <!-- 已選 tag 動態插入此處 -->
+        <div id="bm-types-tags" style="display:flex;flex-wrap:wrap;gap:4px;"></div>
+        <!-- 輸入框，透明背景 -->
+        <input id="bm-types-input" type="text" placeholder="輸入類型…" autocomplete="off" style="border:none;outline:none;background:transparent;flex:1;min-width:80px;color:var(--tx);font-size:0.95rem;">
+      </div>
+      <!-- Dropdown 候選清單，預設隱藏 -->
+      <div id="bm-types-dropdown" class="hidden" style="position:absolute;z-index:200;background:var(--bg-s);border:1px solid var(--bd);border-radius:8px;max-height:180px;overflow-y:auto;width:calc(100% - 16px);margin-top:4px;margin-left:8px;box-shadow:0 4px 6px rgba(0,0,0,0.1);">
+      </div>
+      <!-- 隱藏的 data 欄位，儲存實際 list -->
+      <input type="hidden" id="bm-types-data">
     </div>
     <div class="grid grid-cols-2 gap-3 mb-3">
       <div>
@@ -1252,6 +1457,30 @@ label{font-size:.8rem;color:var(--txs);display:block;margin-bottom:.25rem;}
     <div class="flex gap-3">
       <button class="btn-primary flex-1" onclick="buyerSave()">儲存</button>
       <button class="btn-ghost" onclick="buyerCloseModal()">取消</button>
+    </div>
+  </div>
+</div>
+
+<!-- ════════ 互動記事 Modal ════════ -->
+<div id="contact-modal" class="modal-bg hidden" onclick="if(event.target===this)contactCloseModal()">
+  <div class="modal-box p-6" onclick="event.stopPropagation()">
+    <div class="flex items-center justify-between mb-5">
+      <h3 id="contact-modal-title" class="font-bold text-base" style="color:var(--tx);">新增互動記事</h3>
+      <button onclick="contactCloseModal()" class="text-xl leading-none" style="color:var(--txs);">×</button>
+    </div>
+    <div class="mb-3">
+      <label>互動時間</label>
+      <input id="cm-contact-at" type="datetime-local" style="width:100%;">
+    </div>
+    <div class="mb-5">
+      <label>互動內容 *</label>
+      <textarea id="cm-content" rows="4" placeholder="與買方的互動內容…" style="width:100%;"></textarea>
+    </div>
+    <input type="hidden" id="cm-id">
+    <input type="hidden" id="cm-buyer-id">
+    <div class="flex gap-3">
+      <button class="btn-primary flex-1" onclick="contactSave()">儲存</button>
+      <button class="btn-ghost" onclick="contactCloseModal()">取消</button>
     </div>
   </div>
 </div>
@@ -1616,8 +1845,106 @@ var _warByShowingId = {};         // showing_id → war 物件（進行中才放
 var _warByBuyerId   = {};         // buyer_id   → war 物件（進行中才放，同買方可能多筆取最新）
 var _showingCountByBuyer = {};    // buyer_id → 帶看次數（buyerLoad 時由 /api/showings 統計）
 
+// 物件類型 Autocomplete
+var BUYER_TYPE_OPTIONS = ['農地','建地','店住','透天','平地建物','公寓','華廈','套房','廠辦','倉庫'];
+var _selectedTypes = [];  // 當前 Modal 已選類型暫存
+
 function _isActiveWar(w) {
   return w.status !== '放棄' && w.status !== '成交';
+}
+
+// ═══════════════════════════
+//  物件類型 Tag Autocomplete
+// ═══════════════════════════
+
+function typeTagInit() {
+  // 初始化 Autocomplete 事件監聽
+  var input = document.getElementById('bm-types-input');
+  if (!input) return;
+
+  input.addEventListener('input', typeDropdownRender);
+
+  input.addEventListener('keydown', function(e) {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      var q = input.value.trim();
+      if (q) {
+        typeSelect(q);
+      }
+    } else if (e.key === 'Backspace' && input.value === '') {
+      e.preventDefault();
+      if (_selectedTypes.length > 0) {
+        _selectedTypes.pop();
+        typeTagRender();
+      }
+    } else if (e.key === 'Escape') {
+      document.getElementById('bm-types-dropdown').classList.add('hidden');
+    }
+  });
+
+  input.addEventListener('blur', function() {
+    setTimeout(function() {
+      document.getElementById('bm-types-dropdown').classList.add('hidden');
+    }, 100);
+  });
+
+  // 點擊容器時 focus 輸入框
+  var container = document.getElementById('bm-types-container');
+  if (container) {
+    container.addEventListener('click', function() {
+      input.focus();
+    });
+  }
+}
+
+function typeDropdownRender() {
+  var input = document.getElementById('bm-types-input');
+  var q = (input.value || '').trim().toLowerCase();
+
+  // 過濾選項（包含 q 且不在已選清單中）
+  var filtered = BUYER_TYPE_OPTIONS.filter(function(opt) {
+    return (q === '' || opt.toLowerCase().includes(q)) &&
+           _selectedTypes.indexOf(opt) === -1;
+  });
+
+  var dropdown = document.getElementById('bm-types-dropdown');
+  if (q === '' || filtered.length === 0) {
+    dropdown.classList.add('hidden');
+    return;
+  }
+
+  // 渲染選項
+  dropdown.innerHTML = filtered.map(function(opt) {
+    return '<div style="padding:8px 12px;cursor:pointer;border-bottom:1px solid var(--bd);color:var(--tx);font-size:0.95rem;transition:background 0.2s;" onmouseover="this.style.background=\'var(--bg-h)\'" onmouseout="this.style.background=\'transparent\'" onclick="typeSelect(\'' + esc(opt) + '\')">' + esc(opt) + '</div>';
+  }).join('');
+
+  dropdown.classList.remove('hidden');
+}
+
+function typeSelect(value) {
+  if (_selectedTypes.indexOf(value) === -1) {
+    _selectedTypes.push(value);
+  }
+  var input = document.getElementById('bm-types-input');
+  input.value = '';
+  typeTagRender();
+  document.getElementById('bm-types-dropdown').classList.add('hidden');
+  input.focus();
+}
+
+function typeTagRender() {
+  var tagsDiv = document.getElementById('bm-types-tags');
+  tagsDiv.innerHTML = _selectedTypes.map(function(t, idx) {
+    return '<span style="display:inline-flex;align-items:center;gap:4px;background:var(--ac);color:var(--act);padding:4px 8px;border-radius:6px;font-size:0.9rem;font-weight:500;">' + esc(t) + ' <button onclick="typeRemove(' + idx + ')" style="background:none;border:none;color:var(--act);cursor:pointer;font-size:0.8rem;padding:0;line-height:1;">×</button></span>';
+  }).join('');
+
+  // 更新隱藏欄位
+  document.getElementById('bm-types-data').value = JSON.stringify(_selectedTypes);
+}
+
+function typeRemove(index) {
+  _selectedTypes.splice(index, 1);
+  typeTagRender();
 }
 
 function buyerLoad() {
@@ -1668,6 +1995,22 @@ function buyerFilter() {
         var wb = _warBuyerIds.has(b.id) ? 1 : 0;
         if (wb !== wa) return wb - wa;
         return (b.updated_at || '') > (a.updated_at || '') ? 1 : -1;
+      case 'contact_desc':
+        // 最後追蹤日 新→舊（null 排最後）
+        var ca = a.last_contact_at || '';
+        var cb = b.last_contact_at || '';
+        if (!ca && !cb) return 0;
+        if (!ca) return 1;   // a 沒有追蹤，排後面
+        if (!cb) return -1;
+        return cb > ca ? 1 : -1;
+      case 'contact_asc':
+        // 最後追蹤日 舊→新（null 排最後）
+        var ca = a.last_contact_at || '';
+        var cb = b.last_contact_at || '';
+        if (!ca && !cb) return 0;
+        if (!ca) return 1;
+        if (!cb) return -1;
+        return ca > cb ? 1 : -1;
       case 'updated_desc':
         return (b.updated_at || '') > (a.updated_at || '') ? 1 : -1;
       case 'updated_asc':
@@ -1720,11 +2063,13 @@ function buyerFilter() {
       + '</div>'
       + (b.note ? '<p class="text-xs line-clamp-2" style="color:var(--txs);">' + esc(b.note) + '</p>' : '')
       + (function() {
-          // 底部小資訊列：帶看次數 + 更新日期
+          // 底部小資訊列：帶看次數 + 更新日期 + 最後追蹤日期
           var cnt = _showingCountByBuyer[b.id] || 0;
           var upd = (b.updated_at || '').slice(0, 10);
+          var lc = (b.last_contact_at || '').slice(0, 10);
           var parts = [];
           if (cnt > 0) parts.push('👥 帶看 ' + cnt + ' 次');
+          if (lc)      parts.push('📞 追蹤 ' + lc);
           if (upd)     parts.push('更新 ' + upd);
           return parts.length ? '<p class="text-xs mt-1" style="color:var(--txm);">' + parts.join('　') + '</p>' : '';
         })()
@@ -1739,12 +2084,16 @@ function buyerFilter() {
 function buyerOpenNew() {
   _clearDirty();
   document.getElementById('buyer-modal-title').textContent = '新增買方';
-  ['name','phone','area','types','note'].forEach(function(k) {
+  ['name','phone','area','note'].forEach(function(k) {
     document.getElementById('bm-'+k).value = '';
   });
   ['budget-min','budget-max','size-min','size-max'].forEach(function(k) {
     document.getElementById('bm-'+k).value = '';
   });
+  // 清空類型選擇
+  _selectedTypes = [];
+  typeTagRender();
+  document.getElementById('bm-types-input').value = '';
   document.getElementById('bm-status').value = '洽談中';
   document.getElementById('bm-id').value = '';
   document.getElementById('buyer-modal').classList.remove('hidden');
@@ -1758,7 +2107,10 @@ function buyerOpenEdit(id) {
   document.getElementById('bm-name').value  = b.name || '';
   document.getElementById('bm-phone').value = b.phone || '';
   document.getElementById('bm-area').value  = b.area || '';
-  document.getElementById('bm-types').value = (b.types||[]).join('、');
+  // 初始化類型選擇
+  _selectedTypes = (b.types || []).slice();
+  typeTagRender();
+  document.getElementById('bm-types-input').value = '';
   document.getElementById('bm-note').value  = b.note || '';
   document.getElementById('bm-budget-min').value = b.budget_min || '';
   document.getElementById('bm-budget-max').value = b.budget_max || '';
@@ -1779,8 +2131,7 @@ function buyerSave() {
   var id   = document.getElementById('bm-id').value.trim();
   var name = document.getElementById('bm-name').value.trim();
   if (!name) { toast('請填寫買方姓名', 'error'); return; }
-  var typesRaw = document.getElementById('bm-types').value;
-  var types = typesRaw.split(/[、,，\s]+/).map(s => s.trim()).filter(Boolean);
+  var types = _selectedTypes.slice();  // 直接用 _selectedTypes
   var body = {
     name:       name,
     phone:      document.getElementById('bm-phone').value.trim(),
@@ -1806,7 +2157,7 @@ function buyerSave() {
 }
 
 function buyerDelete(id, name) {
-  if (!confirm('確定刪除「' + name + '」？帶看紀錄也會一併刪除。')) return;
+  if (!confirm('確定刪除「' + name + '」？帶看紀錄與互動記事也會一併刪除。')) return;
   fetch('/api/buyers/' + id, {method:'DELETE'})
     .then(r => r.json()).then(d => {
       if (d.error) { toast(d.error, 'error'); return; }
@@ -1815,17 +2166,22 @@ function buyerDelete(id, name) {
     });
 }
 
-// ── 買方詳情（含帶看紀錄） ──
+// ── 買方詳情（含帶看紀錄與互動記事） ──
 function buyerDetail(id) {
   var b = _buyers.find(function(x){ return x.id === id; });
   if (!b) return;
   var modal = document.getElementById('buyer-detail-modal');
   var content = document.getElementById('buyer-detail-content');
-  content.innerHTML = '<div class="p-6"><p class="text-center py-8" style="color:var(--txs);">載入帶看紀錄…</p></div>';
+  content.innerHTML = '<div class="p-6"><p class="text-center py-8" style="color:var(--txs);">載入紀錄…</p></div>';
   modal.classList.remove('hidden');
 
-  fetch('/api/showings?buyer_id=' + id).then(r => r.json()).then(d => {
-    var showings = d.items || [];
+  // 同時拉帶看紀錄和互動記事
+  Promise.all([
+    fetch('/api/showings?buyer_id=' + id).then(r => r.json()).catch(() => ({items:[]})),
+    fetch('/api/buyers/' + id + '/contacts').then(r => r.json()).catch(() => ({items:[]}))
+  ]).then(function(results) {
+    var showings = results[0].items || [];
+    var contacts = results[1].items || [];
     var types = (b.types||[]).join('、');
     var html = '<div class="p-6">'
       + '<div class="flex items-start justify-between mb-4">'
@@ -1885,12 +2241,128 @@ function buyerDetail(id) {
       html += '</div>';
     }
     html += '</div>';
+
+    // ── 互動記事區塊 ──
+    html += '<div class="mt-6 border-t pt-4" style="border-color:var(--bd);">'
+      + '<div class="flex items-center justify-between mb-3">'
+      + '<h4 class="font-semibold text-sm" style="color:var(--tx);">📞 互動記事（' + contacts.length + ' 筆）</h4>'
+      + '<button class="btn-primary text-xs py-1 px-3" onclick="contactOpenNew(\'' + esc(id) + '\')">＋ 新增記事</button>'
+      + '</div>';
+    if (!contacts.length) {
+      html += '<p class="text-sm text-center py-4" style="color:var(--txm);">尚無互動記事</p>';
+    } else {
+      html += '<div class="space-y-2">';
+      contacts.forEach(function(c) {
+        html += '<div style="border-radius:12px;padding:12px 16px;background:var(--bg-t);">'
+          + '<div class="flex items-start justify-between gap-2">'
+          + '<div class="flex-1 min-w-0">'
+          + '<div class="text-xs" style="color:var(--txs);">⏰ ' + esc(c.contact_at) + '</div>'
+          + '<p class="text-sm mt-1" style="color:var(--tx);">' + esc(c.content) + '</p>'
+          + '</div>'
+          + '<div class="flex gap-1.5 flex-shrink-0 ml-2">'
+          + '<button class="text-xs px-2 py-1 rounded border transition" style="color:var(--ac);border-color:var(--bd);" '
+          +   'data-content="' + esc(c.content) + '" data-contact-at="' + esc(c.contact_at) + '" '
+          +   'onclick="contactOpenEdit(\'' + esc(c.id) + '\',\'' + esc(id) + '\')">編輯</button>'
+          + '<button class="text-xs px-2 py-1 rounded border transition" style="color:var(--dg);border-color:var(--bd);" '
+          +   'onclick="contactDelete(\'' + esc(c.id) + '\',\'' + esc(id) + '\')">刪除</button>'
+          + '</div></div></div>';
+      });
+      html += '</div>';
+    }
+    html += '</div>';
+
     content.innerHTML = html;
   });
 }
 
 function buyerDetailClose() {
   document.getElementById('buyer-detail-modal').classList.add('hidden');
+}
+
+// ═══════════════════════════
+//  互動記事
+// ═══════════════════════════
+
+function contactOpenNew(buyerId) {
+  var now = new Date();
+  var pad = function(n) { return String(n).padStart(2,'0'); };
+  var localStr = now.getFullYear() + '-' + pad(now.getMonth()+1) + '-' + pad(now.getDate())
+               + 'T' + pad(now.getHours()) + ':' + pad(now.getMinutes());
+  document.getElementById('cm-contact-at').value = localStr;
+  document.getElementById('cm-content').value = '';
+  document.getElementById('cm-id').value = '';
+  document.getElementById('cm-buyer-id').value = buyerId;
+  document.getElementById('contact-modal-title').textContent = '新增互動記事';
+  document.getElementById('contact-modal').classList.remove('hidden');
+}
+
+function contactOpenEdit(contactId, buyerId) {
+  var btn = event.target;
+  var content = btn.getAttribute('data-content') || '';
+  var contactAt = (btn.getAttribute('data-contact-at') || '').replace(' ', 'T');  // 格式轉換
+  document.getElementById('cm-contact-at').value = contactAt;
+  document.getElementById('cm-content').value = content;
+  document.getElementById('cm-id').value = contactId;
+  document.getElementById('cm-buyer-id').value = buyerId;
+  document.getElementById('contact-modal-title').textContent = '編輯互動記事';
+  document.getElementById('contact-modal').classList.remove('hidden');
+}
+
+function contactSave() {
+  var content = document.getElementById('cm-content').value.trim();
+  if (!content) {
+    toast('請填寫互動內容', 'error');
+    return;
+  }
+  var id = document.getElementById('cm-id').value.trim();
+  var buyerId = document.getElementById('cm-buyer-id').value.trim();
+  var contactAtLocal = document.getElementById('cm-contact-at').value;  // YYYY-MM-DDTHH:MM
+  var contactAt = contactAtLocal.replace('T', ' ');  // 轉成後端格式 YYYY-MM-DD HH:MM
+
+  var body = {
+    content: content,
+    contact_at: contactAt
+  };
+
+  var url = '/api/buyers/' + buyerId + '/contacts' + (id ? '/' + id : '');
+  var method = id ? 'PUT' : 'POST';
+
+  fetch(url, {
+    method: method,
+    headers: {'Content-Type':'application/json'},
+    body: JSON.stringify(body)
+  }).then(r => r.json()).then(d => {
+    if (d.error) {
+      toast(d.error, 'error');
+      return;
+    }
+    toast(id ? '已更新記事' : '已新增記事', 'success');
+    contactCloseModal();
+    buyerDetail(buyerId);  // 重新載入詳情
+    buyerLoad();           // 重新載入清單（更新 last_contact_at）
+  }).catch(e => {
+    toast('保存失敗', 'error');
+  });
+}
+
+function contactDelete(contactId, buyerId) {
+  if (!confirm('確定刪除這筆互動記事？')) return;
+  fetch('/api/buyers/' + buyerId + '/contacts/' + contactId, {method:'DELETE'})
+    .then(r => r.json()).then(d => {
+      if (d.error) {
+        toast(d.error, 'error');
+        return;
+      }
+      toast('已刪除', 'success');
+      buyerDetail(buyerId);  // 重新載入詳情
+      buyerLoad();           // 重新載入清單
+    }).catch(e => {
+      toast('刪除失敗', 'error');
+    });
+}
+
+function contactCloseModal() {
+  document.getElementById('contact-modal').classList.add('hidden');
 }
 
 // ═══════════════════════════
@@ -2484,10 +2956,12 @@ function showingDelete(id, fromDetail, buyerId) {
 }
 
 // ── 初始化 ──
+typeTagInit();  // 初始化物件類型 Autocomplete
 buyerLoad();
 
 // 為三個 Modal 掛上 dirty 偵測（監聽所有輸入欄位的變動）
 _watchDirty('buyer-modal',   'buyer');
+_watchDirty('contact-modal', 'contact');
 _watchDirty('war-modal',     'war');
 _watchDirty('showing-modal', 'showing');
 
