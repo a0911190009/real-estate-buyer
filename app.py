@@ -1113,15 +1113,23 @@ label{font-size:.8rem;color:var(--txs);display:block;margin-bottom:.25rem;}
 .reaction-好{color:var(--ok);}
 .reaction-普通{color:var(--warn);}
 .reaction-差{color:var(--dg);}
-/* ── 統一 Sidebar ── */
-#app-sidebar{position:fixed;top:0;left:0;height:100%;width:224px;background:var(--bg-s);border-right:1px solid var(--bd);display:flex;flex-direction:column;z-index:300;transition:background 0.3s,border-color 0.3s;}
-#app-sidebar .sb-logo{display:flex;align-items:center;gap:8px;padding:14px 16px;border-bottom:1px solid var(--bd);font-weight:600;color:var(--tx);font-size:0.85rem;}
-#app-sidebar nav{flex:1;padding:16px 8px;display:flex;flex-direction:column;gap:2px;}
-#app-sidebar nav a{display:flex;align-items:center;gap:12px;padding:10px 12px;border-radius:10px;color:var(--txs);font-size:0.875rem;font-weight:500;text-decoration:none;transition:background 0.15s,color 0.15s;}
-#app-sidebar nav a:hover,#app-sidebar nav a.active{background:var(--acs);color:var(--ac);}
-#app-sidebar .sb-user{padding:12px 8px;border-top:1px solid var(--bd);}
-#app-sidebar .sb-user button{width:100%;display:flex;align-items:center;gap:12px;padding:8px 10px;border-radius:10px;border:none;background:none;cursor:pointer;color:var(--txs);font-size:0.875rem;text-align:left;transition:background 0.15s;}
-#app-sidebar .sb-user button:hover{background:var(--bg-h);}
+/* ── 統一 Sidebar（80px icon-only，與 Portal 一致） ── */
+#app-sidebar{position:fixed;top:0;left:0;height:100%;width:80px;background:var(--bg-s);border-right:1px solid var(--bd);display:flex;flex-direction:column;z-index:300;transition:background 0.3s,border-color 0.3s;}
+#app-sidebar .sb-logo{display:flex;align-items:center;justify-content:center;padding:14px 0;border-bottom:1px solid var(--bd);}
+#app-sidebar .sb-logo img{height:32px;width:32px;object-fit:contain;border-radius:8px;}
+#app-sidebar .sb-logo span{display:none;}
+#app-sidebar nav{flex:1;padding:12px 0;display:flex;flex-direction:column;align-items:center;gap:4px;overflow-y:auto;min-height:0;}
+#app-sidebar nav a{width:60px;height:60px;min-width:60px;min-height:60px;display:flex;align-items:center;justify-content:center;border-radius:14px;color:var(--txs);text-decoration:none;transition:background 0.15s,color 0.15s;position:relative;}
+#app-sidebar nav a img{width:28px;height:28px;object-fit:contain;}
+#app-sidebar nav a .sb-nav-text{display:none;}
+#app-sidebar nav a:hover{background:var(--bg-h);}
+#app-sidebar nav a.active{background:var(--acs);}
+#app-sidebar nav a .sb-tooltip{position:absolute;left:calc(100% + 10px);top:50%;transform:translateY(-50%);background:var(--bg-s);color:var(--tx);border:1px solid var(--bd);border-radius:8px;padding:5px 10px;font-size:0.78rem;font-weight:600;white-space:nowrap;pointer-events:none;opacity:0;transition:opacity 0.15s;z-index:300;box-shadow:0 4px 12px rgba(0,0,0,.08);}
+#app-sidebar nav a:hover .sb-tooltip{opacity:1;}
+#app-sidebar .sb-user{padding:12px 0;border-top:1px solid var(--bd);display:flex;justify-content:center;}
+#app-sidebar .sb-user button{width:60px;height:60px;display:flex;align-items:center;justify-content:center;border-radius:14px;border:none;background:var(--bg-h);cursor:pointer;transition:background 0.15s;}
+#app-sidebar .sb-user button:hover{background:var(--bd);}
+#app-sidebar .sb-user .sb-hide{display:none;}
 #app-header{display:none;position:sticky;top:0;z-index:250;background:var(--bg-s);border-bottom:1px solid var(--bd);padding:10px 16px;align-items:center;justify-content:space-between;transition:background 0.3s;}
 #app-header .hd-logo{font-weight:600;color:var(--tx);font-size:0.85rem;}
 /* 通用頭像容器 */
@@ -1137,14 +1145,13 @@ label{font-size:.8rem;color:var(--txs);display:block;margin-bottom:.25rem;}
 #user-dropdown .dd-danger{color:var(--dg);}
 #user-dropdown .dd-danger:hover{background:var(--dgb);}
 #user-dropdown .dd-divider{height:1px;background:var(--bd);margin:4px 0;}
-@media(min-width:768px){body{padding-left:calc(224px + 1.5rem);padding-right:1.5rem;}}
+@media(min-width:768px){body{padding-left:calc(80px + 1.5rem);padding-right:1.5rem;}}
 @media(max-width:767px){#app-sidebar{display:none;}#app-header{display:flex;}body{padding-left:1rem;padding-right:1rem;padding-bottom:72px;}}
-/* 手機底部 Tab Bar */
-#buyer-tab-bar{position:fixed;bottom:0;left:0;right:0;z-index:250;background:var(--bg-s);backdrop-filter:blur(8px);border-top:1px solid var(--bd);display:none;transition:background 0.3s;}
-@media(max-width:767px){#buyer-tab-bar{display:flex;}}
-.buyer-tb-item{flex:1;display:flex;flex-direction:column;align-items:center;gap:2px;padding:8px 4px;color:var(--txm);font-size:0.65rem;text-decoration:none;transition:color 0.15s;position:relative;border-top:2px solid transparent;}
-.buyer-tb-item:hover{color:var(--tx)!important;}
-.buyer-tb-active{color:var(--ac)!important;border-top-color:var(--ac)!important;}
+/* 手機底部 Tab Bar（統一 Portal 風格） */
+#buyer-tab-bar{display:none!important;}/* 舊 buyer-tab-bar 隱藏，改用 app-tab-bar */
+.app-tb-item{flex:1;display:flex;flex-direction:column;align-items:center;gap:2px;padding:4px 2px;color:var(--txm);font-size:0.62rem;text-decoration:none;transition:color 0.15s;border-top:2px solid transparent;}
+.app-tb-item:hover{color:var(--tx)!important;}
+.app-tb-active{color:var(--ac)!important;border-top-color:var(--ac)!important;}
 /* 外觀切換按鈕 */
 #theme-toggle-btn{width:100%;display:flex;align-items:center;gap:10px;padding:8px 12px;border-radius:10px;border:none;background:none;cursor:pointer;color:var(--txs);font-size:0.82rem;text-align:left;transition:background 0.15s;}
 #theme-toggle-btn:hover{background:var(--bg-h);color:var(--tx);}
@@ -1219,28 +1226,29 @@ label{font-size:.8rem;color:var(--txs);display:block;margin-bottom:.25rem;}
   </div>
 </div>
 
-<!-- ── 桌機左側 Sidebar ── -->
+<!-- ── 桌機左側 Sidebar（80px icon-only，與 Portal 一致） ── -->
 <aside id="app-sidebar">
   <div class="sb-logo">
-    <img src="/static/tool-buyer.png" alt="" style="width:22px;height:22px;object-fit:contain;">
+    <img src="/static/logo.png" alt="U.P." onerror="this.style.display='none'" />
     <span>買方管理</span>
   </div>
   <nav>
-    <a href="__PORTAL_URL__" target="tool-portal" id="sb-portal-home"><img src="/static/tool-reels.png" alt="" style="width:18px;height:18px;object-fit:contain;vertical-align:middle;margin-right:8px;"> 工具首頁</a>
-    <a href="javascript:void(0)" id="sb-ad" class="hidden"><img src="/static/tool-ad.png" alt="" style="width:18px;height:18px;object-fit:contain;vertical-align:middle;margin-right:8px;"> 廣告文案</a>
-    <a href="javascript:void(0)" id="sb-library" class="hidden"><img src="/static/tool-library.png" alt="" style="width:18px;height:18px;object-fit:contain;vertical-align:middle;margin-right:8px;"> 物件庫</a>
-    <a href="#" class="active"><img src="/static/tool-buyer.png" alt="" style="width:18px;height:18px;object-fit:contain;vertical-align:middle;margin-right:8px;"> 買方管理</a>
-    <a href="javascript:void(0)" id="sb-survey" class="hidden"><img src="/static/tool-survey.png" alt="" style="width:18px;height:18px;object-fit:contain;vertical-align:middle;margin-right:8px;"> 周邊調查</a>
-    <a href="javascript:void(0)" id="sb-calendar" class="hidden"><img src="/static/tool-calendar.png" alt="" style="width:18px;height:18px;object-fit:contain;vertical-align:middle;margin-right:8px;"> 業務行事曆</a>
+    <a href="__PORTAL_URL__" target="tool-portal" id="sb-portal-home"><img src="/static/tool-reels.png" alt="" /><span class="sb-nav-text">工具首頁</span><span class="sb-tooltip">工具首頁</span></a>
+    <a href="javascript:void(0)" id="sb-ad" class="hidden"><img src="/static/tool-ad.png" alt="" /><span class="sb-nav-text">廣告文案</span><span class="sb-tooltip">廣告文案</span></a>
+    <a href="javascript:void(0)" id="sb-library" class="hidden"><img src="/static/tool-library.png" alt="" /><span class="sb-nav-text">物件庫</span><span class="sb-tooltip">物件庫</span></a>
+    <a href="#" class="active"><img src="/static/tool-buyer.png" alt="" /><span class="sb-nav-text">買方管理</span><span class="sb-tooltip">買方管理</span></a>
+    <a href="javascript:void(0)" id="sb-survey" class="hidden"><img src="/static/tool-survey.png" alt="" /><span class="sb-nav-text">周邊調查</span><span class="sb-tooltip">周邊調查</span></a>
+    <a href="javascript:void(0)" id="sb-calendar" class="hidden"><img src="/static/tool-calendar.png" alt="" /><span class="sb-nav-text">業務行事曆</span><span class="sb-tooltip">業務行事曆</span></a>
   </nav>
   <div class="sb-user">
+    <!-- 桌機：只顯示頭像，文字隱藏 -->
     <button type="button" onclick="buyerToggleDropdown(event)">
       <div id="sb-avatar" class="av-wrap" style="width:36px;height:36px;flex-shrink:0;"><div class="av-fb">__INITIAL__</div></div>
-      <div style="min-width:0;flex:1;">
+      <div class="sb-hide" style="min-width:0;flex:1;">
         <div id="sb-name" style="font-size:0.82rem;font-weight:600;color:var(--tx);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">__USER_NAME__</div>
         <span id="sb-badge" class="points-pill __BADGE_CLASS__" style="margin-top:2px;">__ROLE_LABEL__</span>
       </div>
-      <svg style="width:16px;height:16px;color:var(--txm);flex-shrink:0;" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
+      <svg class="sb-hide" style="width:16px;height:16px;color:var(--txm);flex-shrink:0;" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
     </button>
   </div>
 </aside>
@@ -1273,32 +1281,44 @@ label{font-size:.8rem;color:var(--txs);display:block;margin-bottom:.25rem;}
 </div>
 <div id="user-dropdown-backdrop" style="display:none;position:fixed;inset:0;z-index:499;" onclick="buyerCloseDropdown()"></div>
 
-<!-- ── 手機底部 Tab Bar（仿 Portal 固定顯示所有工具） ── -->
-<nav id="buyer-tab-bar">
-  <a href="__PORTAL_URL__" id="tb-home" class="buyer-tb-item">
-    <img src="/static/tool-reels.png" alt="" style="width:24px;height:24px;object-fit:contain;">
-    <span>首頁</span>
-  </a>
-  <a href="javascript:void(0)" id="tb-ad" class="buyer-tb-item">
-    <img src="/static/tool-ad.png" alt="" style="width:24px;height:24px;object-fit:contain;">
-    <span>廣告</span>
-  </a>
-  <a href="javascript:void(0)" id="tb-library" class="buyer-tb-item">
-    <img src="/static/tool-library.png" alt="" style="width:24px;height:24px;object-fit:contain;">
-    <span>物件庫</span>
-  </a>
-  <a href="#" class="buyer-tb-item buyer-tb-active">
-    <img src="/static/tool-buyer.png" alt="" style="width:24px;height:24px;object-fit:contain;">
-    <span>買方</span>
-  </a>
-  <a href="javascript:void(0)" id="tb-survey" class="buyer-tb-item">
-    <img src="/static/tool-survey.png" alt="" style="width:24px;height:24px;object-fit:contain;">
-    <span>周邊</span>
-  </a>
-  <a href="javascript:void(0)" id="tb-calendar" class="buyer-tb-item">
-    <img src="/static/tool-calendar.png" alt="" style="width:24px;height:24px;object-fit:contain;">
-    <span>行事曆</span>
-  </a>
+<!-- 更多選單遮罩 -->
+<div id="more-menu-overlay" onclick="closeMoreMenu()" style="display:none;position:fixed;inset:0;z-index:240;background:rgba(0,0,0,0.4);"></div>
+<!-- 更多選單面板（從底部滑出，含周邊調查、行事曆、實價登錄） -->
+<div id="more-menu" style="display:none;position:fixed;left:0;right:0;z-index:252;background:var(--bg-s);border-radius:20px 20px 0 0;border-top:1px solid var(--bd);padding:16px 16px 20px;padding-bottom:calc(84px + env(safe-area-inset-bottom));bottom:0;max-height:70vh;overflow-y:auto;transition:background 0.3s;">
+  <div style="width:36px;height:4px;background:var(--bd);border-radius:2px;margin:0 auto 16px;"></div>
+  <div style="font-size:0.72rem;font-weight:700;color:var(--txm);margin-bottom:12px;text-transform:uppercase;letter-spacing:0.06em;">更多工具</div>
+  <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px;">
+    <a id="more-survey" href="javascript:void(0)" onclick="closeMoreMenu()" style="display:flex;flex-direction:column;align-items:center;gap:4px;padding:10px 4px;border-radius:12px;background:var(--bg-t,#f5f5f7);text-decoration:none;color:var(--tx);">
+      <img src="/static/tool-survey.png" alt="" style="width:42px;height:42px;object-fit:contain;" /><span style="font-size:0.65rem;font-weight:600;">周邊調查</span>
+    </a>
+    <a id="more-calendar" href="javascript:void(0)" onclick="closeMoreMenu()" style="display:flex;flex-direction:column;align-items:center;gap:4px;padding:10px 4px;border-radius:12px;background:var(--bg-t,#f5f5f7);text-decoration:none;color:var(--tx);">
+      <img src="/static/tool-calendar.png" alt="" style="width:42px;height:42px;object-fit:contain;" /><span style="font-size:0.65rem;font-weight:600;">行事曆</span>
+    </a>
+    <a id="more-price" href="javascript:void(0)" onclick="closeMoreMenu()" style="display:flex;flex-direction:column;align-items:center;gap:4px;padding:10px 4px;border-radius:12px;background:var(--bg-t,#f5f5f7);text-decoration:none;color:var(--tx);">
+      <img src="/static/tool-price.png" alt="" style="width:42px;height:42px;object-fit:contain;" /><span style="font-size:0.65rem;font-weight:600;">實價登錄</span>
+    </a>
+  </div>
+</div>
+
+<!-- 底部 Tab Bar（統一 Portal 風格：首頁｜物件庫｜廣告｜買方(active)｜更多） -->
+<nav id="app-tab-bar" style="display:none;position:fixed;bottom:0;left:0;right:0;z-index:250;background:var(--bg-s);backdrop-filter:blur(12px);border-top:1px solid var(--bd);padding-bottom:env(safe-area-inset-bottom);transition:background 0.3s;">
+  <div style="display:flex;align-items:center;padding:6px 0 4px;">
+    <a id="tb-home" href="__PORTAL_URL__" class="app-tb-item">
+      <img src="/static/tool-reels.png" alt="" style="width:30px;height:30px;object-fit:contain;" /><span>首頁</span>
+    </a>
+    <a id="tb-library" href="javascript:void(0)" class="app-tb-item">
+      <img src="/static/tool-library.png" alt="" style="width:30px;height:30px;object-fit:contain;" /><span>物件庫</span>
+    </a>
+    <a id="tb-ad" href="javascript:void(0)" class="app-tb-item">
+      <img src="/static/tool-ad.png" alt="" style="width:30px;height:30px;object-fit:contain;" /><span>廣告</span>
+    </a>
+    <a href="#" class="app-tb-item app-tb-active">
+      <img src="/static/tool-buyer.png" alt="" style="width:30px;height:30px;object-fit:contain;" /><span>買方</span>
+    </a>
+    <button onclick="openMoreMenu()" class="app-tb-item" style="border:none;background:none;cursor:pointer;">
+      <span style="font-size:1.4rem;line-height:1;">⋯</span><span>更多</span>
+    </button>
+  </div>
 </nav>
 
 <!-- ── 頂部分頁列 ── -->
@@ -3018,15 +3038,18 @@ function _setAvatar(ids, picUrl, name) {
   // 所有 Tab Bar 和 Sidebar 透過 Portal SSO 跳轉
   if (PORTAL_URL_SB && PORTAL_URL_SB !== '/') {
     var portalBase = PORTAL_URL_SB.replace(/\/$/, '');
-    // Tab Bar：全部設定（不再 hidden 動態顯示，固定顯示）
+    // Tab Bar：設定首頁、物件庫、廣告連結
     var tbLib = document.getElementById('tb-library');
     if (tbLib) { tbLib.href = portalBase + '/api/enter/library'; tbLib.target = 'tool-library'; }
     var tbAd = document.getElementById('tb-ad');
     if (tbAd) { tbAd.href = portalBase + '/api/enter/post'; tbAd.target = 'tool-post'; }
-    var tbSurvey = document.getElementById('tb-survey');
-    if (tbSurvey) { tbSurvey.href = portalBase + '/api/enter/survey'; tbSurvey.target = 'tool-survey'; }
-    var tbCalendar = document.getElementById('tb-calendar');
-    if (tbCalendar) { tbCalendar.href = portalBase + '/api/enter/calendar'; tbCalendar.target = 'tool-calendar'; }
+    // 更多選單連結（周邊調查、行事曆、實價登錄）
+    var moreSurvey = document.getElementById('more-survey');
+    if (moreSurvey) { moreSurvey.href = portalBase + '/api/enter/survey'; moreSurvey.target = 'tool-survey'; }
+    var moreCalendar = document.getElementById('more-calendar');
+    if (moreCalendar) { moreCalendar.href = portalBase + '/api/enter/calendar'; moreCalendar.target = 'tool-calendar'; }
+    var morePrice = document.getElementById('more-price');
+    if (morePrice) { morePrice.href = portalBase + '/api/enter/price'; morePrice.target = 'tool-price'; }
     // Sidebar 廣告、周邊、行事曆
     var sbAd = document.getElementById('sb-ad');
     if (sbAd) { sbAd.href = portalBase + '/api/enter/post'; sbAd.target = 'tool-post'; sbAd.classList.remove('hidden'); }
@@ -3180,6 +3203,25 @@ function buyerDoLogout() {
     document.body.setAttribute('data-theme', (STYLE_MODES[s] || STYLE_MODES.navy)[eff]);
   })();
   document.addEventListener('DOMContentLoaded', _init);
+})();
+</script>
+<script>
+/* ── 更多選單（手機） ── */
+function openMoreMenu(){
+  document.getElementById('more-menu').style.display='block';
+  document.getElementById('more-menu-overlay').style.display='block';
+}
+function closeMoreMenu(){
+  document.getElementById('more-menu').style.display='none';
+  document.getElementById('more-menu-overlay').style.display='none';
+}
+/* 手機才顯示底部 Tab Bar */
+(function(){
+  var tb=document.getElementById('app-tab-bar');
+  if(!tb)return;
+  function chk(){tb.style.display=window.innerWidth<=767?'block':'none';}
+  chk();
+  window.addEventListener('resize',chk);
 })();
 </script>
 </body>
