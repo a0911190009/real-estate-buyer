@@ -1054,6 +1054,7 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
 <html lang="zh-TW">
 <head>
   <link rel="icon" type="image/png" href="/static/favicon.png">
+  <link rel="apple-touch-icon" href="/static/logo.png">
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>買方管理</title>
