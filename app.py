@@ -1075,7 +1075,7 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
 
 /* ══ 通用樣式（全用 CSS 變數）══ */
 *,*::before,*::after{box-sizing:border-box;}
-body{background:var(--bg-p);color:var(--tx);font-family:'Noto Sans TC','Segoe UI',sans-serif;min-height:100vh;transition:background 0.3s,color 0.3s;}
+body{background:var(--bg-p);color:var(--tx);font-family:'Noto Sans TC','Segoe UI',sans-serif;min-height:100vh;transition:background 0.3s,color 0.3s;overflow-x:hidden;}
 .tab-btn{transition:color .15s,border-color .15s;}
 .tab-btn.active{color:var(--ac);border-bottom:2px solid var(--ac);font-weight:600;}
 .card{background:var(--bg-s);border:1px solid var(--bd);border-radius:1rem;padding:1rem;transition:background 0.3s,border-color 0.3s;}
@@ -1117,11 +1117,11 @@ label{font-size:.8rem;color:var(--txs);display:block;margin-bottom:.25rem;}
 /* ── 統一 Sidebar（80px icon-only，與 Portal 一致） ── */
 #app-sidebar{position:fixed;top:0;left:0;height:100%;width:80px;background:var(--bg-s);border-right:1px solid var(--bd);display:flex;flex-direction:column;z-index:300;transition:background 0.3s,border-color 0.3s;}
 #app-sidebar .sb-logo{display:flex;align-items:center;justify-content:center;padding:14px 0;border-bottom:1px solid var(--bd);}
-#app-sidebar .sb-logo img{height:32px;width:32px;object-fit:contain;border-radius:8px;}
+#app-sidebar .sb-logo img{height:48px;width:48px;object-fit:contain;border-radius:8px;}
 #app-sidebar .sb-logo span{display:none;}
 #app-sidebar nav{flex:1;padding:12px 0;display:flex;flex-direction:column;align-items:center;gap:4px;overflow-y:auto;min-height:0;}
 #app-sidebar nav a{width:60px;height:60px;min-width:60px;min-height:60px;display:flex;align-items:center;justify-content:center;border-radius:14px;color:var(--txs);text-decoration:none;transition:background 0.15s,color 0.15s;position:relative;}
-#app-sidebar nav a img{width:28px;height:28px;object-fit:contain;}
+#app-sidebar nav a img{width:36px;height:36px;object-fit:contain;}
 #app-sidebar nav a .sb-nav-text{display:none;}
 #app-sidebar nav a:hover{background:var(--bg-h);}
 #app-sidebar nav a.active{background:var(--acs);}
@@ -1230,7 +1230,9 @@ label{font-size:.8rem;color:var(--txs);display:block;margin-bottom:.25rem;}
 <!-- ── 桌機左側 Sidebar（80px icon-only，與 Portal 一致） ── -->
 <aside id="app-sidebar">
   <div class="sb-logo">
-    <img src="/static/logo.png" alt="U.P." onerror="this.style.display='none'" />
+    <a id="sb-logo-link" href="javascript:void(0)" onclick="var el=document.getElementById('sb-portal-home');if(el&&el.href&&el.href!='javascript:void(0)')window.open(el.href,'tool-portal');else if(el&&el.getAttribute('data-href'))window.open(el.getAttribute('data-href'),'tool-portal');" title="回到工具首頁" style="display:flex;align-items:center;justify-content:center;">
+      <img src="/static/logo.png" alt="U.P." onerror="this.style.display='none'" />
+    </a>
     <span>買方管理</span>
   </div>
   <nav>
@@ -1305,16 +1307,16 @@ label{font-size:.8rem;color:var(--txs);display:block;margin-bottom:.25rem;}
 <nav id="app-tab-bar" style="display:none;position:fixed;bottom:0;left:0;right:0;z-index:250;background:var(--bg-s);backdrop-filter:blur(12px);border-top:1px solid var(--bd);padding-bottom:env(safe-area-inset-bottom);transition:background 0.3s;">
   <div style="display:flex;align-items:center;padding:6px 0 4px;">
     <a id="tb-home" href="__PORTAL_URL__" class="app-tb-item">
-      <img src="/static/tool-reels.png" alt="" style="width:30px;height:30px;object-fit:contain;" /><span>首頁</span>
+      <img src="/static/tool-reels.png" alt="" style="width:36px;height:36px;object-fit:contain;" /><span>首頁</span>
     </a>
     <a id="tb-library" href="javascript:void(0)" class="app-tb-item">
-      <img src="/static/tool-library.png" alt="" style="width:30px;height:30px;object-fit:contain;" /><span>物件庫</span>
+      <img src="/static/tool-library.png" alt="" style="width:36px;height:36px;object-fit:contain;" /><span>物件庫</span>
     </a>
     <a id="tb-ad" href="javascript:void(0)" class="app-tb-item">
-      <img src="/static/tool-ad.png" alt="" style="width:30px;height:30px;object-fit:contain;" /><span>廣告</span>
+      <img src="/static/tool-ad.png" alt="" style="width:36px;height:36px;object-fit:contain;" /><span>廣告</span>
     </a>
     <a href="#" class="app-tb-item app-tb-active">
-      <img src="/static/tool-buyer.png" alt="" style="width:30px;height:30px;object-fit:contain;" /><span>買方</span>
+      <img src="/static/tool-buyer.png" alt="" style="width:36px;height:36px;object-fit:contain;" /><span>買方</span>
     </a>
     <button onclick="openMoreMenu()" class="app-tb-item" style="border:none;background:none;cursor:pointer;">
       <span style="font-size:1.4rem;line-height:1;">⋯</span><span>更多</span>
