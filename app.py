@@ -2264,7 +2264,8 @@ function buyerDetail(id) {
     html += '</div>';
 
     // ── 互動記事區塊 ──
-    html += '<div class="flex items-center justify-between mb-3" style="margin-top:1.5rem;border-top:1px solid var(--bd);padding-top:1rem;">'
+    html += '<div style="margin-top:1.5rem;border-top:1px solid var(--bd);padding-top:1rem;">'
+      + '<div class="flex items-center justify-between mb-3">'
       + '<h4 class="font-semibold text-sm" style="color:var(--tx);">📞 互動記事（' + contacts.length + ' 筆）</h4>'
       + '<button class="btn-primary text-xs py-1 px-3" onclick="contactOpenNew(\'' + esc(id) + '\')">＋ 新增記事</button>'
       + '</div>';
@@ -2289,6 +2290,7 @@ function buyerDetail(id) {
       });
       html += '</div>';
     }
+    html += '</div>';
 
     content.innerHTML = html;
   });
