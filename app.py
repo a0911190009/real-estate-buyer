@@ -319,7 +319,7 @@ def api_buyers_create():
             "size_min":    data.get("size_min"),      # 坪數下限
             "size_max":    data.get("size_max"),      # 坪數上限
             "note":        str(data.get("note", "")).strip(),       # 備註
-            "status":      data.get("status", "洽談中"),            # 洽談中/成交/流失
+            "status":      data.get("status", "洽談中"),            # 洽談中/暫無需求/成交/流失
             "created_by":  email,
             "created_at":  _now_str(),
             "updated_at":  _now_str(),
@@ -1364,6 +1364,7 @@ label{font-size:.8rem;color:var(--txs);display:block;margin-bottom:.25rem;}
     <select id="buyer-status-filter" onchange="buyerFilter()" style="width:auto">
       <option value="">全部狀態</option>
       <option value="洽談中">洽談中</option>
+      <option value="暫無需求">暫無需求</option>
       <option value="成交">成交</option>
       <option value="流失">流失</option>
     </select>
@@ -1475,6 +1476,7 @@ label{font-size:.8rem;color:var(--txs);display:block;margin-bottom:.25rem;}
       <label>狀態</label>
       <select id="bm-status">
         <option value="洽談中">洽談中</option>
+        <option value="暫無需求">暫無需求</option>
         <option value="成交">成交</option>
         <option value="流失">流失</option>
       </select>
@@ -1793,7 +1795,7 @@ function fmtSize(min, max) {
   return min + '～' + max + ' 坪';
 }
 function statusBadge(s) {
-  var map = {'洽談中':'badge-blue','成交':'badge-green','流失':'badge-gray'};
+  var map = {'洽談中':'badge-blue','暫無需求':'badge-amber','成交':'badge-green','流失':'badge-gray'};
   return '<span class="badge ' + (map[s]||'badge-gray') + '">' + esc(s) + '</span>';
 }
 function warStatusBadge(s) {
