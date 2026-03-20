@@ -358,6 +358,50 @@ def api_buyers_create():
         return jsonify({"error": str(e)}), 500
 
 
+# ══════════════════════════════════════════
+#  買方自由排列順序（須在 <buyer_id> 路由之前，避免被誤匹配）
+# ══════════════════════════════════════════
+
+@app.route("/api/buyers/sort-order", methods=["PUT"])
+def api_buyers_sort_order():
+    """儲存買方卡片的自訂排列順序。"""
+    email, err = _require_user()
+    if err:
+        return jsonify({"error": err[0]}), err[1]
+    db = _get_db()
+    if db is None:
+        return jsonify({"error": "Firestore 未連線"}), 503
+    try:
+        data = request.get_json(force=True) or {}
+        order = data.get("order", [])  # 買方 ID 陣列，代表排列順序
+        if not isinstance(order, list):
+            return jsonify({"error": "order 格式不正確"}), 400
+        # 存到 user_settings/{email}/buyer_sort_order
+        ref = db.collection("user_settings").document(email)
+        ref.set({"buyer_sort_order": order}, merge=True)
+        return jsonify({"ok": True})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route("/api/buyers/sort-order", methods=["GET"])
+def api_buyers_sort_order_get():
+    """取得買方卡片的自訂排列順序。"""
+    email, err = _require_user()
+    if err:
+        return jsonify({"error": err[0]}), err[1]
+    db = _get_db()
+    if db is None:
+        return jsonify({"error": "Firestore 未連線"}), 503
+    try:
+        doc = db.collection("user_settings").document(email).get()
+        if doc.exists:
+            return jsonify({"order": doc.to_dict().get("buyer_sort_order", [])})
+        return jsonify({"order": []})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
 @app.route("/api/buyers/<buyer_id>", methods=["GET"])
 def api_buyer_get(buyer_id):
     """取得單筆買方資料。"""
@@ -1141,6 +1185,16 @@ body{background:var(--bg-p);color:var(--tx);font-family:'Noto Sans TC','Segoe UI
 .badge-amber{background:#92400e;color:#fde68a;}
 .badge-purple{background:#6b21a8;color:#e9d5ff;}
 .badge-role{background:var(--tg);color:var(--tgt);}
+/* ══ 欄數切換按鈕 ══ */
+.col-btn{width:28px;height:28px;border-radius:6px;border:1px solid var(--bd);background:transparent;color:var(--txs);font-size:12px;font-weight:600;cursor:pointer;transition:all .15s;}
+.col-btn:hover{border-color:var(--ac);color:var(--ac);}
+.col-btn.active{background:var(--ac);color:var(--act);border-color:var(--ac);}
+/* ══ 拖曳模式 ══ */
+.drag-mode .card{cursor:grab;user-select:none;position:relative;}
+.drag-mode .card:active{cursor:grabbing;}
+.drag-mode .card::before{content:'⠿';position:absolute;top:8px;left:8px;font-size:16px;color:var(--txm);pointer-events:none;}
+.card.drag-over{border:2px dashed var(--ac);opacity:0.7;}
+.card.dragging{opacity:0.4;transform:scale(0.96);}
 .points-pill{display:inline-flex;align-items:center;padding:0.2rem 0.6rem;border-radius:9999px;font-size:0.72rem;font-weight:600;white-space:nowrap;}
 .points-pill.admin{background:rgba(139,92,246,0.2);color:rgb(196,167,255);}
 .points-pill.sub{background:rgba(34,197,94,0.2);color:rgb(134,239,172);}
@@ -1502,10 +1556,26 @@ label{font-size:.8rem;color:var(--txs);display:block;margin-bottom:.25rem;}
       <option value="created_asc">建立日 舊→新</option>
       <option value="showing_desc">帶看次數 多→少</option>
       <option value="name_asc">姓名 排序</option>
+      <option value="custom">📌 自訂排列</option>
     </select>
   </div>
-  <div id="buyer-list" class="space-y-3">
-    <p class="text-center py-12" style="color:var(--txs);">載入中…</p>
+  <!-- 欄數切換 + 自由排列模式 -->
+  <div class="flex items-center gap-2 mb-2 flex-wrap">
+    <span class="text-xs" style="color:var(--txs);">欄數：</span>
+    <div id="col-btns" class="flex gap-1">
+      <button class="col-btn" data-col="1" onclick="setColumns(1)">1</button>
+      <button class="col-btn" data-col="2" onclick="setColumns(2)">2</button>
+      <button class="col-btn active" data-col="3" onclick="setColumns(3)">3</button>
+      <button class="col-btn" data-col="4" onclick="setColumns(4)">4</button>
+      <button class="col-btn" data-col="5" onclick="setColumns(5)">5</button>
+    </div>
+    <div style="width:1px;height:18px;background:var(--bd);margin:0 4px;"></div>
+    <button id="drag-mode-btn" class="text-xs px-3 py-1 rounded border transition" style="color:var(--txs);border-color:var(--bd);" onclick="toggleDragMode()">🔀 自由排列</button>
+    <button id="drag-save-btn" class="text-xs px-3 py-1 rounded border transition hidden" style="color:#fef3c7;border-color:#b45309;background:#92400e;" onclick="saveDragOrder()">💾 儲存排列</button>
+    <button id="drag-cancel-btn" class="text-xs px-3 py-1 rounded border transition hidden" style="color:var(--txs);border-color:var(--bd);" onclick="cancelDragMode()">取消</button>
+  </div>
+  <div id="buyer-list" style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;">
+    <p class="text-center py-12" style="color:var(--txs);grid-column:1/-1;">載入中…</p>
   </div>
 </div>
 
@@ -2105,15 +2175,17 @@ function typeRemove(index) {
 }
 
 function buyerLoad() {
-  // 同時拉買方清單、戰況版、帶看紀錄（統計帶看次數）
+  // 同時拉買方清單、戰況版、帶看紀錄、自訂排列順序
   Promise.all([
     fetch('/api/buyers').then(r => r.json()),
     fetch('/api/war').then(r => r.json()).catch(() => ({items:[]})),
     fetch('/api/showings').then(r => r.json()).catch(() => ({items:[]})),
+    fetch('/api/buyers/sort-order').then(r => r.json()).catch(() => ({order:[]})),
   ]).then(function(results) {
     _buyers = results[0].items || [];
     var wars     = results[1].items || [];
     var showings = results[2].items || [];
+    _savedCustomOrder = results[3].order || [];
     // 統計每位買方的帶看次數
     _showingCountByBuyer = {};
     showings.forEach(function(s) {
@@ -2127,6 +2199,10 @@ function buyerLoad() {
       if (w.buyer_id)  { _warBuyerIds.add(w.buyer_id); _warByBuyerId[w.buyer_id] = w; }
       if (w.showing_id){ _warByShowingId[w.showing_id] = w; }
     });
+    // 如果有儲存過自訂排列，預設使用自訂排列
+    if (_savedCustomOrder.length > 0) {
+      document.getElementById('buyer-sort').value = 'custom';
+    }
     buyerFilter();
   }).catch(e => toast('載入買方失敗', 'error'));
 }
@@ -2183,13 +2259,21 @@ function buyerFilter() {
         return (b.updated_at || '') > (a.updated_at || '') ? 1 : -1;
       case 'name_asc':
         return (a.name || '').localeCompare(b.name || '', 'zh-TW');
+      case 'custom':
+        // 依照儲存的自訂排列順序
+        var ia = _savedCustomOrder.indexOf(a.id);
+        var ib = _savedCustomOrder.indexOf(b.id);
+        // 不在列表中的排到最後
+        if (ia === -1) ia = 99999;
+        if (ib === -1) ib = 99999;
+        return ia - ib;
       default:
         return 0;
     }
   });
   var list = document.getElementById('buyer-list');
   if (!items.length) {
-    list.innerHTML = '<p class="text-center py-12" style="color:var(--txs);">沒有符合的買方</p>';
+    list.innerHTML = '<p class="text-center py-12" style="color:var(--txs);grid-column:1/-1;">沒有符合的買方</p>';
     return;
   }
   list.innerHTML = items.map(function(b) {
@@ -2204,7 +2288,7 @@ function buyerFilter() {
     var warBadge = isInWar && warObj
       ? '<button style="background:#b45309;color:#fef3c7;font-size:11px;font-weight:700;padding:2px 8px;border-radius:20px;letter-spacing:.5px;border:none;cursor:pointer;" onclick="event.stopPropagation();warOpenEdit(\'' + warObj.id + '\')">⚔️ 斡旋中</button>'
       : '';
-    return '<div class="' + cardBorder + '" onclick="buyerDetail(\'' + b.id + '\')">'
+    return '<div class="' + cardBorder + '" data-id="' + b.id + '" onclick="buyerDetail(\'' + b.id + '\')">'
       + '<div class="flex items-start justify-between">'
       + '<div class="flex-1 min-w-0">'
       + '<div class="flex items-center gap-2 flex-wrap mb-1">'
@@ -2236,7 +2320,190 @@ function buyerFilter() {
       + '<button class="text-xs py-1 px-2 rounded border transition" style="color:var(--dg);border-color:var(--bd);" onclick="event.stopPropagation();buyerDelete(\'' + b.id + '\',\'' + esc(b.name) + '\')">刪除</button>'
       + '</div></div></div>';
   }).join('');
+  // 拖曳模式下，渲染完重新綁定拖曳事件
+  if (_dragMode) _bindDragEvents();
 }
+
+// ═══════════════════════════
+//  欄數切換
+// ═══════════════════════════
+var _currentCols = 3; // 預設 3 欄
+function setColumns(n) {
+  _currentCols = n;
+  var list = document.getElementById('buyer-list');
+  list.style.gridTemplateColumns = 'repeat(' + n + ', 1fr)';
+  // 更新按鈕高亮
+  document.querySelectorAll('.col-btn').forEach(function(btn) {
+    btn.classList.toggle('active', parseInt(btn.dataset.col) === n);
+  });
+  // 存到 localStorage 記住使用者偏好
+  localStorage.setItem('buyer_col_count', n);
+}
+// 頁面載入時讀取偏好，並根據螢幕寬度調整預設
+(function() {
+  var saved = parseInt(localStorage.getItem('buyer_col_count'));
+  if (saved >= 1 && saved <= 5) {
+    _currentCols = saved;
+  } else {
+    // 根據螢幕寬度自動設定預設欄數
+    var w = window.innerWidth;
+    if (w < 640) _currentCols = 1;
+    else if (w < 900) _currentCols = 2;
+    else _currentCols = 3;
+  }
+  setTimeout(function() { setColumns(_currentCols); }, 0);
+})();
+
+// ═══════════════════════════
+//  拖曳自由排列模式
+// ═══════════════════════════
+var _dragMode = false;
+var _dragSrcEl = null;       // 正在拖曳的元素
+var _customOrder = [];       // 自訂排列的 ID 陣列
+
+function toggleDragMode() {
+  if (_dragMode) {
+    cancelDragMode();
+    return;
+  }
+  _dragMode = true;
+  var list = document.getElementById('buyer-list');
+  list.classList.add('drag-mode');
+  document.getElementById('drag-mode-btn').style.background = 'var(--ac)';
+  document.getElementById('drag-mode-btn').style.color = 'var(--act)';
+  document.getElementById('drag-save-btn').classList.remove('hidden');
+  document.getElementById('drag-cancel-btn').classList.remove('hidden');
+  // 記住當前排列
+  _customOrder = Array.from(list.querySelectorAll('.card[data-id]')).map(function(el) { return el.dataset.id; });
+  _bindDragEvents();
+  toast('拖曳卡片可自由排列，完成後按「儲存排列」', 'info');
+}
+
+function cancelDragMode() {
+  _dragMode = false;
+  var list = document.getElementById('buyer-list');
+  list.classList.remove('drag-mode');
+  document.getElementById('drag-mode-btn').style.background = '';
+  document.getElementById('drag-mode-btn').style.color = '';
+  document.getElementById('drag-save-btn').classList.add('hidden');
+  document.getElementById('drag-cancel-btn').classList.add('hidden');
+  // 取消 → 重新渲染恢復原本排列
+  buyerFilter();
+}
+
+var _touchDragEl = null;  // 觸控拖曳用
+var _touchClone = null;   // 觸控拖曳的浮動複製品
+
+function _bindDragEvents() {
+  var list = document.getElementById('buyer-list');
+  var cards = list.querySelectorAll('.card[data-id]');
+  cards.forEach(function(card) {
+    // ── 桌面版：HTML5 Drag & Drop ──
+    card.setAttribute('draggable', 'true');
+    card.ondragstart = function(e) {
+      _dragSrcEl = card;
+      card.classList.add('dragging');
+      e.dataTransfer.effectAllowed = 'move';
+      e.dataTransfer.setData('text/plain', card.dataset.id);
+    };
+    card.ondragend = function() {
+      card.classList.remove('dragging');
+      list.querySelectorAll('.drag-over').forEach(function(el) { el.classList.remove('drag-over'); });
+    };
+    card.ondragover = function(e) {
+      e.preventDefault();
+      e.dataTransfer.dropEffect = 'move';
+      if (card !== _dragSrcEl) card.classList.add('drag-over');
+    };
+    card.ondragleave = function() {
+      card.classList.remove('drag-over');
+    };
+    card.ondrop = function(e) {
+      e.preventDefault();
+      card.classList.remove('drag-over');
+      if (_dragSrcEl && _dragSrcEl !== card) {
+        var allCards = Array.from(list.querySelectorAll('.card[data-id]'));
+        var srcIdx = allCards.indexOf(_dragSrcEl);
+        var tgtIdx = allCards.indexOf(card);
+        if (srcIdx < tgtIdx) {
+          list.insertBefore(_dragSrcEl, card.nextSibling);
+        } else {
+          list.insertBefore(_dragSrcEl, card);
+        }
+      }
+    };
+
+    // ── 手機版：觸控拖曳 ──
+    card.ontouchstart = function(e) {
+      if (!_dragMode) return;
+      e.preventDefault();
+      _touchDragEl = card;
+      card.classList.add('dragging');
+    };
+    card.ontouchmove = function(e) {
+      if (!_dragMode || !_touchDragEl) return;
+      e.preventDefault();
+      var touch = e.touches[0];
+      // 找到觸控點下方的卡片
+      // 暫時隱藏自己以偵測下方元素
+      _touchDragEl.style.pointerEvents = 'none';
+      var target = document.elementFromPoint(touch.clientX, touch.clientY);
+      _touchDragEl.style.pointerEvents = '';
+      // 找到最近的 .card[data-id]
+      if (target) {
+        var tgtCard = target.closest('.card[data-id]');
+        list.querySelectorAll('.drag-over').forEach(function(el) { el.classList.remove('drag-over'); });
+        if (tgtCard && tgtCard !== _touchDragEl) tgtCard.classList.add('drag-over');
+      }
+    };
+    card.ontouchend = function(e) {
+      if (!_dragMode || !_touchDragEl) return;
+      var overEl = list.querySelector('.drag-over');
+      if (overEl && overEl !== _touchDragEl) {
+        var allCards = Array.from(list.querySelectorAll('.card[data-id]'));
+        var srcIdx = allCards.indexOf(_touchDragEl);
+        var tgtIdx = allCards.indexOf(overEl);
+        if (srcIdx < tgtIdx) {
+          list.insertBefore(_touchDragEl, overEl.nextSibling);
+        } else {
+          list.insertBefore(_touchDragEl, overEl);
+        }
+      }
+      _touchDragEl.classList.remove('dragging');
+      list.querySelectorAll('.drag-over').forEach(function(el) { el.classList.remove('drag-over'); });
+      _touchDragEl = null;
+    };
+
+    // 拖曳模式下，攔截點擊避免開詳情
+    card.addEventListener('click', function(e) {
+      if (_dragMode) { e.stopImmediatePropagation(); e.preventDefault(); }
+    }, true);
+  });
+}
+
+function saveDragOrder() {
+  var list = document.getElementById('buyer-list');
+  var order = Array.from(list.querySelectorAll('.card[data-id]')).map(function(el) { return el.dataset.id; });
+  // 存到後端
+  fetch('/api/buyers/sort-order', {
+    method: 'PUT',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({order: order})
+  }).then(function(r) { return r.json(); }).then(function(d) {
+    if (d.ok) {
+      _savedCustomOrder = order;
+      toast('排列順序已儲存', 'success');
+      // 自動切換排序到「自訂排列」
+      document.getElementById('buyer-sort').value = 'custom';
+      cancelDragMode();
+    } else {
+      toast(d.error || '儲存失敗', 'error');
+    }
+  }).catch(function() { toast('儲存失敗', 'error'); });
+}
+
+// 儲存從後端載入的自訂排列
+var _savedCustomOrder = [];
 
 function buyerOpenNew() {
   _clearDirty();
