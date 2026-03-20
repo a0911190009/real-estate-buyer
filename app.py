@@ -319,7 +319,7 @@ def api_buyers_create():
             "size_min":    data.get("size_min"),      # 坪數下限
             "size_max":    data.get("size_max"),      # 坪數上限
             "note":        str(data.get("note", "")).strip(),       # 備註
-            "status":      data.get("status", "洽談中"),            # 洽談中/暫無需求/成交/流失
+            "status":      data.get("status", "洽談中"),            # 洽談中/持續看物件/暫無需求/成交/流失
             "created_by":  email,
             "created_at":  _now_str(),
             "updated_at":  _now_str(),
@@ -1088,6 +1088,7 @@ body{background:var(--bg-p);color:var(--tx);font-family:'Noto Sans TC','Segoe UI
 .badge-red{background:#991b1b;color:#fecaca;}
 .badge-gray{background:#374151;color:#9ca3af;}
 .badge-amber{background:#92400e;color:#fde68a;}
+.badge-purple{background:#6b21a8;color:#e9d5ff;}
 .badge-role{background:var(--tg);color:var(--tgt);}
 .points-pill{display:inline-flex;align-items:center;padding:0.2rem 0.6rem;border-radius:9999px;font-size:0.72rem;font-weight:600;white-space:nowrap;}
 .points-pill.admin{background:rgba(139,92,246,0.2);color:rgb(196,167,255);}
@@ -1364,6 +1365,7 @@ label{font-size:.8rem;color:var(--txs);display:block;margin-bottom:.25rem;}
     <select id="buyer-status-filter" onchange="buyerFilter()" style="width:auto">
       <option value="">全部狀態</option>
       <option value="洽談中">洽談中</option>
+      <option value="持續看物件">持續看物件</option>
       <option value="暫無需求">暫無需求</option>
       <option value="成交">成交</option>
       <option value="流失">流失</option>
@@ -1476,6 +1478,7 @@ label{font-size:.8rem;color:var(--txs);display:block;margin-bottom:.25rem;}
       <label>狀態</label>
       <select id="bm-status">
         <option value="洽談中">洽談中</option>
+        <option value="持續看物件">持續看物件</option>
         <option value="暫無需求">暫無需求</option>
         <option value="成交">成交</option>
         <option value="流失">流失</option>
@@ -1795,7 +1798,7 @@ function fmtSize(min, max) {
   return min + '～' + max + ' 坪';
 }
 function statusBadge(s) {
-  var map = {'洽談中':'badge-blue','暫無需求':'badge-amber','成交':'badge-green','流失':'badge-gray'};
+  var map = {'洽談中':'badge-blue','持續看物件':'badge-purple','暫無需求':'badge-amber','成交':'badge-green','流失':'badge-gray'};
   return '<span class="badge ' + (map[s]||'badge-gray') + '">' + esc(s) + '</span>';
 }
 function warStatusBadge(s) {
@@ -2272,9 +2275,7 @@ function buyerDetail(id) {
       });
       html += '</div>';
     }
-    html += '</div>';
-
-    // ── 互動記事區塊 ──
+    // ── 互動記事區塊（仍在 p-6 容器內，保持左右留白對齊） ──
     html += '<div style="margin-top:1.5rem;border-top:1px solid var(--bd);padding-top:1rem;">'
       + '<div class="flex items-center justify-between mb-3">'
       + '<h4 class="font-semibold text-sm" style="color:var(--tx);">📞 互動記事（' + contacts.length + ' 筆）</h4>'
@@ -2302,6 +2303,7 @@ function buyerDetail(id) {
       html += '</div>';
     }
     html += '</div>';
+    html += '</div>'; // 關閉 p-6 容器
 
     content.innerHTML = html;
   });
