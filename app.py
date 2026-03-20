@@ -84,6 +84,9 @@ SERVICE_API_KEY = (os.environ.get("SERVICE_API_KEY") or "").strip()
 TOKEN_SERIALIZER = URLSafeTimedSerializer(app.secret_key)
 TOKEN_MAX_AGE   = 300  # 5 分鐘，容忍 Cloud Run cold start
 
+_APP_DIR = os.path.dirname(os.path.abspath(__file__))
+GENERAL_FEEDBACK_FILE = os.path.join(_APP_DIR, "general_feedback.json")
+
 
 def _verify_service_key():
     """驗證 X-Service-Key header 與 SERVICE_API_KEY 一致。"""
@@ -96,6 +99,28 @@ def _verify_service_key():
 
 def _is_admin(email):
     return email in ADMIN_EMAILS
+
+
+def _load_general_feedback():
+    """讀取通用反饋列表"""
+    if os.path.exists(GENERAL_FEEDBACK_FILE):
+        try:
+            with open(GENERAL_FEEDBACK_FILE, "r", encoding="utf-8") as f:
+                return json.load(f)
+        except:
+            return []
+    return []
+
+
+def _atomic_write(fpath, data_str):
+    """原子寫入：先寫 .tmp，fsync 後再 os.replace，讀取時永遠是完整檔案。"""
+    os.makedirs(os.path.dirname(fpath), exist_ok=True)
+    tmp = fpath + ".tmp"
+    with open(tmp, "w", encoding="utf-8") as f:
+        f.write(data_str)
+        f.flush()
+        os.fsync(f.fileno())
+    os.replace(tmp, fpath)
 
 
 def _require_user():
@@ -1041,6 +1066,32 @@ def _render_index(email):
     return html, 200, {'Content-Type': 'text/html; charset=utf-8'}
 
 
+@app.route("/api/general-feedback", methods=["GET"])
+def api_general_feedback_get():
+    """列出所有通用反饋"""
+    return jsonify(_load_general_feedback())
+
+
+@app.route("/api/general-feedback", methods=["POST"])
+def api_general_feedback():
+    """通用反饋"""
+    data = request.get_json() or {}
+    text = (data.get("text") or "").strip()
+    if not text:
+        return jsonify({"error": "請輸入意見內容"}), 400
+
+    entries = _load_general_feedback()
+    entries.append({
+        "text": text,
+        "category": data.get("category", ""),
+        "created_at": datetime.now().isoformat(),
+    })
+    data_str = json.dumps(entries, ensure_ascii=False, indent=2)
+    _atomic_write(GENERAL_FEEDBACK_FILE, data_str)
+
+    return jsonify({"ok": True, "total": len(entries)})
+
+
 @app.route("/")
 def index():
     email, err = _require_user()
@@ -1178,6 +1229,76 @@ label{font-size:.8rem;color:var(--txs);display:block;margin-bottom:.25rem;}
 .tp-mode-btn{flex:1;padding:7px 4px;border-radius:7px;border:1px solid var(--bd);background:none;color:var(--txs);font-size:0.74rem;cursor:pointer;transition:all 0.15s;}
 .tp-mode-btn.active{background:var(--ac);color:var(--act);border-color:var(--ac);}
 .tp-section{font-size:0.68rem;font-weight:600;color:var(--txm);text-transform:uppercase;letter-spacing:0.05em;margin-bottom:6px;margin-top:14px;}
+/* ── 通用意見反饋 ── */
+.gf-overlay {
+  display: none;
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.5);
+  z-index: 2000;
+  justify-content: center;
+  align-items: center;
+}
+.gf-overlay.show { display: flex; }
+.gf-dialog {
+  background: var(--card);
+  border: 1px solid var(--input-border);
+  border-radius: 12px;
+  padding: 1.5rem;
+  width: 90%;
+  max-width: 420px;
+  box-shadow: 0 8px 32px rgba(0,0,0,0.3);
+}
+.gf-dialog h3 { margin: 0 0 0.8rem; font-size: 1.1rem; }
+.gf-dialog select {
+  width: 100%;
+  padding: 0.4rem;
+  margin-bottom: 0.6rem;
+  font-size: 0.88rem;
+  border: 1px solid var(--input-border);
+  border-radius: 6px;
+  background: var(--bg);
+  color: var(--text);
+}
+.gf-dialog textarea {
+  width: 100%;
+  min-height: 80px;
+  resize: vertical;
+  font-size: 0.88rem;
+  border: 1px solid var(--input-border);
+  border-radius: 6px;
+  background: var(--bg);
+  color: var(--text);
+  padding: 0.5rem;
+  box-sizing: border-box;
+  font-family: inherit;
+}
+.gf-dialog textarea:focus { outline: none; border-color: var(--accent); }
+.gf-dialog .gf-actions {
+  display: flex;
+  gap: 0.5rem;
+  justify-content: flex-end;
+  margin-top: 0.8rem;
+}
+.gf-dialog .gf-actions button {
+  padding: 0.4rem 1rem;
+  font-size: 0.85rem;
+  border: 1px solid var(--input-border);
+  border-radius: 6px;
+  cursor: pointer;
+  background: var(--bg);
+  color: var(--text);
+}
+.gf-dialog .gf-actions button.primary {
+  background: var(--accent);
+  color: #fff;
+  border-color: var(--accent);
+}
+.gf-dialog .gf-toast {
+  margin-top: 0.5rem;
+  font-size: 0.82rem;
+  color: var(--ok);
+}
 </style>
 </head>
 <body data-theme="navy-dark">
@@ -1281,6 +1402,7 @@ label{font-size:.8rem;color:var(--txs);display:block;margin-bottom:.25rem;}
     <a id="dd-account" href="javascript:void(0)" class="hidden">👤 帳號管理</a>
     <a id="dd-admin" href="javascript:void(0)" class="hidden">🛡️ 後台管理</a>
     <button onclick="buyerCloseDropdown();document.getElementById('theme-panel').style.display='block';" style="display:flex;align-items:center;gap:10px;width:100%;padding:10px 16px;border:none;background:none;color:var(--txs);font-size:0.85rem;cursor:pointer;text-align:left;transition:background 0.15s;" onmouseover="this.style.background='var(--bg-h)';this.style.color='var(--tx)'" onmouseout="this.style.background='none';this.style.color='var(--txs)'">🎨 外觀設定</button>
+    <button onclick="buyerCloseDropdown();document.getElementById('gf-overlay').classList.add('show');" style="display:flex;align-items:center;gap:10px;width:100%;padding:10px 16px;border:none;background:none;color:var(--txs);font-size:0.85rem;cursor:pointer;text-align:left;transition:background 0.15s;" onmouseover="this.style.background='var(--bg-h)';this.style.color='var(--tx)'" onmouseout="this.style.background='none';this.style.color='var(--txs)'">💬 意見反饋</button>
   </div>
   <div class="dd-divider"></div>
   <div style="padding:4px 0;">
@@ -1497,7 +1619,7 @@ label{font-size:.8rem;color:var(--txs);display:block;margin-bottom:.25rem;}
 </div>
 
 <!-- ════════ 互動記事 Modal ════════ -->
-<div id="contact-modal" class="modal-bg hidden" onclick="if(event.target===this)contactCloseModal()">
+<div id="contact-modal" class="modal-bg hidden" style="z-index:220" onclick="if(event.target===this)contactCloseModal()">
   <div class="modal-box p-6" onclick="event.stopPropagation()">
     <div class="flex items-center justify-between mb-5">
       <h3 id="contact-modal-title" class="font-bold text-base" style="color:var(--tx);">新增互動記事</h3>
@@ -3242,7 +3364,55 @@ function closeMoreMenu(){ toggleMoreMenu(); }
   chk();
   window.addEventListener('resize',chk);
 })();
+
+  // ── Global feedback dialog ──
+  (function() {
+    const overlay = document.getElementById("gf-overlay");
+    const cancelBtn = document.getElementById("gf-cancel");
+    const submitBtn = document.getElementById("gf-submit");
+    const textEl = document.getElementById("gf-text");
+    const catEl = document.getElementById("gf-category");
+    const toast = document.getElementById("gf-toast");
+
+    cancelBtn.addEventListener("click", () => { overlay.classList.remove("show"); });
+    overlay.addEventListener("click", (e) => { if (e.target === overlay) overlay.classList.remove("show"); });
+
+    submitBtn.addEventListener("click", () => {
+      const text = textEl.value.trim();
+      if (!text) { textEl.style.borderColor = "var(--danger)"; return; }
+      textEl.style.borderColor = "";
+      fetch("/api/general-feedback", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ text, category: catEl.value }),
+      }).then(r => r.json()).then(d => {
+        toast.textContent = "✅ 感謝您的意見！已記錄。";
+        toast.style.display = "block";
+        textEl.value = "";
+        setTimeout(() => { toast.style.display = "none"; overlay.classList.remove("show"); }, 1500);
+      });
+    });
+  })();
 </script>
+  <!-- 通用意見反饋對話框 -->
+  <div class="gf-overlay" id="gf-overlay">
+    <div class="gf-dialog">
+      <h3>💬 意見反饋</h3>
+      <select id="gf-category">
+        <option value="功能建議">功能建議</option>
+        <option value="分類錯誤">分類錯誤回報</option>
+        <option value="資料問題">資料不準確</option>
+        <option value="介面體驗">介面體驗改進</option>
+        <option value="其他">其他</option>
+      </select>
+      <textarea id="gf-text" placeholder="請輸入您的意見或建議…"></textarea>
+      <div class="gf-actions">
+        <button id="gf-cancel">取消</button>
+        <button id="gf-submit" class="primary">送出</button>
+      </div>
+      <div class="gf-toast" id="gf-toast" style="display:none;"></div>
+    </div>
+  </div>
 </body>
 </html>"""
 
