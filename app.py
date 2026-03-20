@@ -1530,7 +1530,7 @@ label{font-size:.8rem;color:var(--txs);display:block;margin-bottom:.25rem;}
 <div id="toast-container"></div>
 
 <!-- ══ 買方列表 ══ -->
-<div id="pane-buyers" class="max-w-4xl mx-auto px-4 py-6">
+<div id="pane-buyers" class="mx-auto px-4 py-6" style="max-width:896px;transition:max-width 0.3s;">
   <div class="flex items-center justify-between mb-4">
     <h2 class="font-bold text-lg" style="color:var(--tx);">👥 買方列表</h2>
     <button class="btn-primary" onclick="buyerOpenNew()">＋ 新增買方</button>
@@ -2332,6 +2332,10 @@ function setColumns(n) {
   _currentCols = n;
   var list = document.getElementById('buyer-list');
   list.style.gridTemplateColumns = 'repeat(' + n + ', 1fr)';
+  // 根據欄數動態調整容器最大寬度
+  var pane = document.getElementById('pane-buyers');
+  var widthMap = {1: '896px', 2: '896px', 3: '896px', 4: '1200px', 5: '100%'};
+  pane.style.maxWidth = widthMap[n] || '896px';
   // 更新按鈕高亮
   document.querySelectorAll('.col-btn').forEach(function(btn) {
     btn.classList.toggle('active', parseInt(btn.dataset.col) === n);
