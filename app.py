@@ -751,6 +751,51 @@ def api_buyers_list_for_agent():
         return jsonify({"error": str(e)}), 500
 
 
+@app.route("/api/buyers/need-followup", methods=["GET"])
+def api_buyers_need_followup():
+    """晨報專用：以 X-Service-Key 取得超過 N 天未聯絡的洽談中買方。
+    Query: email=xxx（必填）, days=7（預設 7 天）"""
+    if not _verify_service_key():
+        return jsonify({"error": "需要有效的 X-Service-Key"}), 401
+    email = (request.args.get("email") or "").strip()
+    if not email or "@" not in email:
+        return jsonify({"error": "缺少有效的 email"}), 400
+    days = int(request.args.get("days", 7))
+    db = _get_db()
+    if db is None:
+        return jsonify({"items": []})
+    try:
+        from datetime import datetime, timedelta
+        cutoff = (datetime.now() - timedelta(days=days)).strftime("%Y-%m-%d")
+        docs = db.collection("buyers").where("created_by", "==", email).stream()
+        items = []
+        for d in docs:
+            item = d.to_dict()
+            # 只看「洽談中」或「持續看物件」的買方
+            status = item.get("status", "洽談中")
+            if status not in ("洽談中", "持續看物件"):
+                continue
+            # 檢查最後聯絡日
+            last_contact = item.get("last_contact_at") or item.get("created_at") or ""
+            last_date = last_contact[:10] if last_contact else ""
+            # 超過 N 天未聯絡（或從未聯絡）
+            if not last_date or last_date < cutoff:
+                items.append({
+                    "name": item.get("name", ""),
+                    "phone": item.get("phone", ""),
+                    "budget_min": item.get("budget_min", ""),
+                    "budget_max": item.get("budget_max", ""),
+                    "area_pref": item.get("area_pref", ""),
+                    "status": status,
+                    "last_contact": last_date or "無紀錄",
+                })
+        # 按最後聯絡日排序（越久沒聯絡的排前面）
+        items.sort(key=lambda x: x.get("last_contact", ""))
+        return jsonify({"items": items[:10]})  # 最多 10 筆
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
 @app.route("/api/showings/from-calendar", methods=["POST"])
 def api_showings_from_calendar():
     """
