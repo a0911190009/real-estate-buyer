@@ -796,6 +796,48 @@ def api_buyers_need_followup():
         return jsonify({"error": str(e)}), 500
 
 
+@app.route("/api/buyers/create-from-service", methods=["POST"])
+def api_buyers_create_from_service():
+    """服務間呼叫：由展示頁自動建立買方記錄。
+    Header: X-Service-Key
+    Body: {name, phone, budget_min, budget_max, note, created_by}
+    """
+    if not _verify_service_key():
+        return jsonify({"error": "需要有效的 X-Service-Key"}), 401
+    db = _get_db()
+    if db is None:
+        return jsonify({"error": "Firestore 未連線"}), 503
+    try:
+        data = request.get_json(force=True) or {}
+        name = str(data.get("name", "")).strip()
+        created_by = str(data.get("created_by", "")).strip()
+        if not name:
+            return jsonify({"error": "缺少姓名"}), 400
+        if not created_by or "@" not in created_by:
+            return jsonify({"error": "缺少有效的 created_by email"}), 400
+        doc = {
+            "name":       name,
+            "phone":      str(data.get("phone", "")).strip(),
+            "budget_min": data.get("budget_min"),
+            "budget_max": data.get("budget_max"),
+            "area":       str(data.get("area", "")).strip(),
+            "types":      [],
+            "size_min":   None,
+            "size_max":   None,
+            "note":       str(data.get("note", "")).strip(),
+            "status":     "洽談中",
+            "card_color": "",
+            "created_by": created_by,
+            "created_at": _now_str(),
+            "updated_at": _now_str(),
+        }
+        ref = db.collection("buyers").document()
+        ref.set(doc)
+        return jsonify({"ok": True, "id": ref.id})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
 @app.route("/api/showings/from-calendar", methods=["POST"])
 def api_showings_from_calendar():
     """
