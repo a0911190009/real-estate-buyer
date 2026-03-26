@@ -1825,7 +1825,7 @@ label{font-size:.8rem;color:var(--txs);display:block;margin-bottom:.25rem;}
 </div>
 
 <!-- ════════ 戰況 Modal ════════ -->
-<div id="war-modal" class="modal-bg hidden" onclick="if(event.target===this)warCloseModal()">
+<div id="war-modal" class="modal-bg hidden" style="z-index:150" onclick="if(event.target===this)warCloseModal()">
   <div class="modal-box overflow-y-auto" style="max-height:92vh;padding:1.5rem" onclick="event.stopPropagation()">
     <div class="flex items-center justify-between mb-4">
       <h3 id="war-modal-title" class="font-bold text-base" style="color:var(--tx);">新增戰況</h3>
