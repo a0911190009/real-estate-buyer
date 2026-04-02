@@ -1279,9 +1279,8 @@ body{background:var(--bg-p);color:var(--tx);font-family:'Noto Sans TC','Segoe UI
 .col-btn:hover{border-color:var(--ac);color:var(--ac);}
 .col-btn.active{background:var(--ac);color:var(--act);border-color:var(--ac);}
 /* ══ 拖曳模式 ══ */
-.drag-mode .card{cursor:grab;user-select:none;position:relative;}
+.drag-mode .card{cursor:grab;user-select:none;}
 .drag-mode .card:active{cursor:grabbing;}
-.drag-mode .card::before{content:'⠿';position:absolute;top:8px;left:8px;font-size:16px;color:var(--txm);pointer-events:none;}
 .card.drag-over{border:2px dashed var(--ac);opacity:0.7;}
 .card.dragging{opacity:0.4;transform:scale(0.96);}
 /* ══ 卡片顏色選擇器（Google Keep 風格）══ */
@@ -2593,9 +2592,9 @@ function saveDragOrder() {
     if (d.ok) {
       _savedCustomOrder = order;
       toast('排列順序已儲存', 'success');
-      // 自動切換排序到「自訂排列」
+      // 自動切換排序到「自訂排列」，隱藏儲存按鈕
       document.getElementById('buyer-sort').value = 'custom';
-      cancelDragMode();
+      document.getElementById('drag-save-btn').classList.add('hidden');
     } else {
       toast(d.error || '儲存失敗', 'error');
     }
