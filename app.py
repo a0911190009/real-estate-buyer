@@ -1663,9 +1663,7 @@ label{font-size:.8rem;color:var(--txs);display:block;margin-bottom:.25rem;}
       <button class="col-btn" data-col="5" onclick="setColumns(5)">5</button>
     </div>
     <div style="width:1px;height:18px;background:var(--bd);margin:0 4px;"></div>
-    <button id="drag-mode-btn" class="text-xs px-3 py-1 rounded border transition" style="color:var(--txs);border-color:var(--bd);" onclick="toggleDragMode()">🔀 自由排列</button>
     <button id="drag-save-btn" class="text-xs px-3 py-1 rounded border transition hidden" style="color:#fef3c7;border-color:#b45309;background:#92400e;" onclick="saveDragOrder()">💾 儲存排列</button>
-    <button id="drag-cancel-btn" class="text-xs px-3 py-1 rounded border transition hidden" style="color:var(--txs);border-color:var(--bd);" onclick="cancelDragMode()">取消</button>
   </div>
   <div id="buyer-list" style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;">
     <p class="text-center py-12" style="color:var(--txs);grid-column:1/-1;">載入中…</p>
@@ -2433,8 +2431,8 @@ function buyerFilter() {
       + '<button class="text-xs py-1 px-2 rounded border transition" style="color:var(--dg);border-color:var(--bd);" onclick="event.stopPropagation();buyerDelete(\'' + b.id + '\',\'' + esc(b.name) + '\')">刪除</button>'
       + '</div></div></div>';
   }).join('');
-  // 拖曳模式下，渲染完重新綁定拖曳事件
-  if (_dragMode) _bindDragEvents();
+  // 渲染完後永遠綁定拖曳事件（不需進入拖曳模式）
+  _bindDragEvents();
 }
 
 // ═══════════════════════════
@@ -2474,51 +2472,27 @@ function setColumns(n) {
 // ═══════════════════════════
 //  拖曳自由排列模式
 // ═══════════════════════════
-var _dragMode = false;
 var _dragSrcEl = null;       // 正在拖曳的元素
-var _customOrder = [];       // 自訂排列的 ID 陣列
+var _isDragging = false;     // 區分「真正拖曳」vs「普通點擊」
+var _touchDragEl = null;     // 觸控拖曳用
+var _touchMoved = false;     // 觸控是否有移動（區分 tap vs drag）
 
-function toggleDragMode() {
-  if (_dragMode) {
-    cancelDragMode();
-    return;
-  }
-  _dragMode = true;
-  var list = document.getElementById('buyer-list');
-  list.classList.add('drag-mode');
-  document.getElementById('drag-mode-btn').style.background = 'var(--ac)';
-  document.getElementById('drag-mode-btn').style.color = 'var(--act)';
+// 有發生拖動 → 顯示儲存按鈕
+function _markDirty() {
   document.getElementById('drag-save-btn').classList.remove('hidden');
-  document.getElementById('drag-cancel-btn').classList.remove('hidden');
-  // 記住當前排列
-  _customOrder = Array.from(list.querySelectorAll('.card[data-id]')).map(function(el) { return el.dataset.id; });
-  _bindDragEvents();
-  toast('拖曳卡片可自由排列，完成後按「儲存排列」', 'info');
 }
-
-function cancelDragMode() {
-  _dragMode = false;
-  var list = document.getElementById('buyer-list');
-  list.classList.remove('drag-mode');
-  document.getElementById('drag-mode-btn').style.background = '';
-  document.getElementById('drag-mode-btn').style.color = '';
-  document.getElementById('drag-save-btn').classList.add('hidden');
-  document.getElementById('drag-cancel-btn').classList.add('hidden');
-  // 取消 → 重新渲染恢復原本排列
-  buyerFilter();
-}
-
-var _touchDragEl = null;  // 觸控拖曳用
-var _touchClone = null;   // 觸控拖曳的浮動複製品
 
 function _bindDragEvents() {
   var list = document.getElementById('buyer-list');
+  // 讓整個列表顯示 grab cursor
+  list.classList.add('drag-mode');
   var cards = list.querySelectorAll('.card[data-id]');
   cards.forEach(function(card) {
     // ── 桌面版：HTML5 Drag & Drop ──
     card.setAttribute('draggable', 'true');
     card.ondragstart = function(e) {
       _dragSrcEl = card;
+      _isDragging = true;
       card.classList.add('dragging');
       e.dataTransfer.effectAllowed = 'move';
       e.dataTransfer.setData('text/plain', card.dataset.id);
@@ -2526,6 +2500,8 @@ function _bindDragEvents() {
     card.ondragend = function() {
       card.classList.remove('dragging');
       list.querySelectorAll('.drag-over').forEach(function(el) { el.classList.remove('drag-over'); });
+      // 短暫延遲後清除旗標，讓 click 事件可以正確判斷
+      setTimeout(function() { _isDragging = false; }, 50);
     };
     card.ondragover = function(e) {
       e.preventDefault();
@@ -2547,26 +2523,31 @@ function _bindDragEvents() {
         } else {
           list.insertBefore(_dragSrcEl, card);
         }
+        _markDirty();
       }
     };
 
-    // ── 手機版：觸控拖曳 ──
+    // ── 手機版：長壓觸控拖曳 ──
+    var _touchTimer = null;
     card.ontouchstart = function(e) {
-      if (!_dragMode) return;
-      e.preventDefault();
-      _touchDragEl = card;
-      card.classList.add('dragging');
+      _touchMoved = false;
+      // 長壓 400ms 才啟動拖曳，避免干擾一般捲動和點擊
+      _touchTimer = setTimeout(function() {
+        _touchDragEl = card;
+        card.classList.add('dragging');
+      }, 400);
     };
     card.ontouchmove = function(e) {
-      if (!_dragMode || !_touchDragEl) return;
+      _touchMoved = true;
+      if (!_touchDragEl) {
+        clearTimeout(_touchTimer);
+        return;
+      }
       e.preventDefault();
       var touch = e.touches[0];
-      // 找到觸控點下方的卡片
-      // 暫時隱藏自己以偵測下方元素
       _touchDragEl.style.pointerEvents = 'none';
       var target = document.elementFromPoint(touch.clientX, touch.clientY);
       _touchDragEl.style.pointerEvents = '';
-      // 找到最近的 .card[data-id]
       if (target) {
         var tgtCard = target.closest('.card[data-id]');
         list.querySelectorAll('.drag-over').forEach(function(el) { el.classList.remove('drag-over'); });
@@ -2574,7 +2555,8 @@ function _bindDragEvents() {
       }
     };
     card.ontouchend = function(e) {
-      if (!_dragMode || !_touchDragEl) return;
+      clearTimeout(_touchTimer);
+      if (!_touchDragEl) return;
       var overEl = list.querySelector('.drag-over');
       if (overEl && overEl !== _touchDragEl) {
         var allCards = Array.from(list.querySelectorAll('.card[data-id]'));
@@ -2585,15 +2567,16 @@ function _bindDragEvents() {
         } else {
           list.insertBefore(_touchDragEl, overEl);
         }
+        _markDirty();
       }
       _touchDragEl.classList.remove('dragging');
       list.querySelectorAll('.drag-over').forEach(function(el) { el.classList.remove('drag-over'); });
       _touchDragEl = null;
     };
 
-    // 拖曳模式下，攔截點擊避免開詳情
+    // 真正拖曳過才攔截點擊，普通點一下不攔截
     card.addEventListener('click', function(e) {
-      if (_dragMode) { e.stopImmediatePropagation(); e.preventDefault(); }
+      if (_isDragging) { e.stopImmediatePropagation(); e.preventDefault(); }
     }, true);
   });
 }
