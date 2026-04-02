@@ -346,6 +346,7 @@ def api_buyers_create():
             "note":        str(data.get("note", "")).strip(),       # 備註
             "status":      data.get("status", "洽談中"),            # 洽談中/持續看物件/暫無需求/成交/流失
             "card_color":  str(data.get("card_color", "")).strip(),  # 卡片底色（hex 色碼）
+            "photo_b64":   data.get("photo_b64") or None,            # 買方頭像（base64 JPEG）
             "created_by":  email,
             "created_at":  _now_str(),
             "updated_at":  _now_str(),
@@ -456,6 +457,7 @@ def api_buyer_update(buyer_id):
             "note":       str(data.get("note", item.get("note", ""))).strip(),
             "status":     data.get("status", item.get("status", "洽談中")),
             "card_color": str(data.get("card_color", item.get("card_color", ""))).strip(),
+            "photo_b64":  data.get("photo_b64", item.get("photo_b64")) or None,  # None = 移除照片
             "updated_at": _now_str(),
         }
         ref.update(update)
@@ -1283,6 +1285,8 @@ body{background:var(--bg-p);color:var(--tx);font-family:'Noto Sans TC','Segoe UI
 .drag-mode .card:active{cursor:grabbing;}
 .card.drag-over{border:2px dashed var(--ac);opacity:0.7;}
 .card.dragging{opacity:0.4;transform:scale(0.96);}
+.buyer-avatar{width:44px;height:44px;border-radius:50%;object-fit:cover;flex-shrink:0;border:2px solid var(--bd);}
+.buyer-avatar-ph{width:44px;height:44px;border-radius:50%;background:var(--ac);color:var(--act);font-size:17px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0;}
 /* ══ 卡片顏色選擇器（Google Keep 風格）══ */
 .color-dot{width:28px;height:28px;border-radius:50%;border:2px solid transparent;cursor:pointer;transition:transform .15s,border-color .15s;flex-shrink:0;}
 .color-dot:hover{transform:scale(1.15);border-color:var(--tx);}
@@ -1768,22 +1772,39 @@ label{font-size:.8rem;color:var(--txs);display:block;margin-bottom:.25rem;}
       <label>備註</label>
       <textarea id="bm-note" rows="3" placeholder="需求說明、特殊條件…"></textarea>
     </div>
+    <!-- 買方照片 -->
+    <div class="mb-3">
+      <label>買方照片</label>
+      <div class="flex items-center gap-3 mt-1">
+        <div id="bm-photo-preview" style="width:64px;height:64px;border-radius:50%;border:2px solid var(--bd);background:var(--bg-s);display:flex;align-items:center;justify-content:center;overflow:hidden;flex-shrink:0;">
+          <span id="bm-photo-placeholder" style="color:var(--txm);font-size:26px;">👤</span>
+          <img id="bm-photo-img" style="display:none;width:100%;height:100%;object-fit:cover;">
+        </div>
+        <div>
+          <button type="button" class="btn-ghost text-sm" onclick="document.getElementById('bm-photo-file').click()">📷 上傳照片</button>
+          <button type="button" id="bm-photo-clear" class="text-xs hidden" style="color:var(--dg);margin-left:8px;" onclick="bmClearPhoto()">移除</button>
+          <p class="text-xs mt-1" style="color:var(--txm);">支援 JPG / PNG，自動裁切圓形</p>
+        </div>
+      </div>
+      <input type="file" id="bm-photo-file" accept="image/*" style="display:none;" onchange="bmPickPhoto(this)">
+      <input type="hidden" id="bm-photo-b64">
+    </div>
     <!-- 卡片顏色選擇（類似 Google Keep） -->
     <div class="mb-5">
       <label>卡片顏色</label>
       <div id="bm-color-picker" class="flex gap-2 flex-wrap mt-1">
         <button type="button" class="color-dot selected" data-color="" title="預設" onclick="pickCardColor('')" style="background:var(--bg-s);border:2px solid var(--bd);"></button>
-        <button type="button" class="color-dot" data-color="#77172e" title="莓紅" onclick="pickCardColor('#77172e')" style="background:#77172e;"></button>
-        <button type="button" class="color-dot" data-color="#692b17" title="橘棕" onclick="pickCardColor('#692b17')" style="background:#692b17;"></button>
-        <button type="button" class="color-dot" data-color="#7c4a03" title="沙金" onclick="pickCardColor('#7c4a03')" style="background:#7c4a03;"></button>
-        <button type="button" class="color-dot" data-color="#264d3b" title="森綠" onclick="pickCardColor('#264d3b')" style="background:#264d3b;"></button>
-        <button type="button" class="color-dot" data-color="#0c625d" title="青綠" onclick="pickCardColor('#0c625d')" style="background:#0c625d;"></button>
-        <button type="button" class="color-dot" data-color="#256377" title="湖藍" onclick="pickCardColor('#256377')" style="background:#256377;"></button>
-        <button type="button" class="color-dot" data-color="#284255" title="深藍" onclick="pickCardColor('#284255')" style="background:#284255;"></button>
-        <button type="button" class="color-dot" data-color="#472e5b" title="紫羅蘭" onclick="pickCardColor('#472e5b')" style="background:#472e5b;"></button>
-        <button type="button" class="color-dot" data-color="#6c394f" title="粉紫" onclick="pickCardColor('#6c394f')" style="background:#6c394f;"></button>
-        <button type="button" class="color-dot" data-color="#4b443a" title="暖灰" onclick="pickCardColor('#4b443a')" style="background:#4b443a;"></button>
-        <button type="button" class="color-dot" data-color="#232427" title="炭黑" onclick="pickCardColor('#232427')" style="background:#232427;"></button>
+        <button type="button" class="color-dot" data-color="#ffd6d6" title="淡玫瑰" onclick="pickCardColor('#ffd6d6')" style="background:#ffd6d6;"></button>
+        <button type="button" class="color-dot" data-color="#ffdfc8" title="淡桃" onclick="pickCardColor('#ffdfc8')" style="background:#ffdfc8;"></button>
+        <button type="button" class="color-dot" data-color="#fff3c4" title="淡黃" onclick="pickCardColor('#fff3c4')" style="background:#fff3c4;"></button>
+        <button type="button" class="color-dot" data-color="#d6f5d6" title="淡綠" onclick="pickCardColor('#d6f5d6')" style="background:#d6f5d6;"></button>
+        <button type="button" class="color-dot" data-color="#c8f0ec" title="淡薄荷" onclick="pickCardColor('#c8f0ec')" style="background:#c8f0ec;"></button>
+        <button type="button" class="color-dot" data-color="#c8e8f8" title="淡水藍" onclick="pickCardColor('#c8e8f8')" style="background:#c8e8f8;"></button>
+        <button type="button" class="color-dot" data-color="#d4d8f8" title="淡藍紫" onclick="pickCardColor('#d4d8f8')" style="background:#d4d8f8;"></button>
+        <button type="button" class="color-dot" data-color="#ead5f8" title="淡紫" onclick="pickCardColor('#ead5f8')" style="background:#ead5f8;"></button>
+        <button type="button" class="color-dot" data-color="#f8d5ec" title="淡粉紫" onclick="pickCardColor('#f8d5ec')" style="background:#f8d5ec;"></button>
+        <button type="button" class="color-dot" data-color="#ede0d4" title="奶茶" onclick="pickCardColor('#ede0d4')" style="background:#ede0d4;"></button>
+        <button type="button" class="color-dot" data-color="#e8e8e8" title="淡灰" onclick="pickCardColor('#e8e8e8')" style="background:#e8e8e8;"></button>
       </div>
     </div>
     <input type="hidden" id="bm-color" value="">
@@ -2396,8 +2417,12 @@ function buyerFilter() {
       ? '<button style="background:#b45309;color:#fef3c7;font-size:11px;font-weight:700;padding:2px 8px;border-radius:20px;letter-spacing:.5px;border:none;cursor:pointer;" onclick="event.stopPropagation();warOpenEdit(\'' + warObj.id + '\')">⚔️ 斡旋中</button>'
       : '';
     var cardStyle = b.card_color ? 'background:' + b.card_color + ';' : '';
+    var avatarHtml = b.photo_b64
+      ? '<img class="buyer-avatar mr-3" src="' + b.photo_b64 + '">'
+      : '<div class="buyer-avatar-ph mr-3">' + esc(b.name).charAt(0).toUpperCase() + '</div>';
     return '<div class="' + cardBorder + '" data-id="' + b.id + '" style="' + cardStyle + '" onclick="buyerDetail(\'' + b.id + '\')">'
       + '<div class="flex items-start justify-between">'
+      + avatarHtml
       + '<div class="flex-1 min-w-0">'
       + '<div class="flex items-center gap-2 flex-wrap mb-1">'
       + '<span class="font-semibold text-base" style="color:var(--tx);">' + esc(b.name) + '</span>'
@@ -2603,6 +2628,45 @@ function pickCardColor(color) {
   });
 }
 
+// ── 買方照片上傳 ──
+function bmPickPhoto(input) {
+  var file = input.files[0];
+  if (!file) return;
+  var reader = new FileReader();
+  reader.onload = function(e) {
+    var img = new Image();
+    img.onload = function() {
+      // 裁切正方形，縮放至 160px
+      var size = 160;
+      var canvas = document.createElement('canvas');
+      canvas.width = size; canvas.height = size;
+      var ctx = canvas.getContext('2d');
+      var src = Math.min(img.width, img.height);
+      var sx = (img.width  - src) / 2;
+      var sy = (img.height - src) / 2;
+      ctx.drawImage(img, sx, sy, src, src, 0, 0, size, size);
+      var b64 = canvas.toDataURL('image/jpeg', 0.82);
+      document.getElementById('bm-photo-b64').value = b64;
+      document.getElementById('bm-photo-img').src = b64;
+      document.getElementById('bm-photo-img').style.display = 'block';
+      document.getElementById('bm-photo-placeholder').style.display = 'none';
+      document.getElementById('bm-photo-clear').classList.remove('hidden');
+      _dirtyModal = 'buyer'; // 標記有變更
+    };
+    img.src = e.target.result;
+  };
+  reader.readAsDataURL(file);
+  input.value = ''; // 清除，讓同一檔案可再次觸發
+}
+
+function bmClearPhoto() {
+  document.getElementById('bm-photo-b64').value = '';
+  document.getElementById('bm-photo-img').style.display = 'none';
+  document.getElementById('bm-photo-img').src = '';
+  document.getElementById('bm-photo-placeholder').style.display = '';
+  document.getElementById('bm-photo-clear').classList.add('hidden');
+}
+
 function buyerOpenNew() {
   _clearDirty();
   document.getElementById('buyer-modal-title').textContent = '新增買方';
@@ -2618,6 +2682,7 @@ function buyerOpenNew() {
   document.getElementById('bm-types-input').value = '';
   document.getElementById('bm-status').value = '洽談中';
   pickCardColor(''); // 預設無顏色
+  bmClearPhoto();
   document.getElementById('bm-id').value = '';
   document.getElementById('buyer-modal').classList.remove('hidden');
 }
@@ -2641,6 +2706,16 @@ function buyerOpenEdit(id) {
   document.getElementById('bm-size-max').value   = b.size_max || '';
   document.getElementById('bm-status').value = b.status || '洽談中';
   pickCardColor(b.card_color || ''); // 載入已存顏色
+  // 載入照片
+  if (b.photo_b64) {
+    document.getElementById('bm-photo-b64').value = b.photo_b64;
+    document.getElementById('bm-photo-img').src = b.photo_b64;
+    document.getElementById('bm-photo-img').style.display = 'block';
+    document.getElementById('bm-photo-placeholder').style.display = 'none';
+    document.getElementById('bm-photo-clear').classList.remove('hidden');
+  } else {
+    bmClearPhoto();
+  }
   document.getElementById('bm-id').value = b.id;
   document.getElementById('buyer-modal').classList.remove('hidden');
 }
@@ -2668,6 +2743,7 @@ function buyerSave() {
     note:       document.getElementById('bm-note').value.trim(),
     status:     document.getElementById('bm-status').value,
     card_color: document.getElementById('bm-color').value || '',
+    photo_b64:  document.getElementById('bm-photo-b64').value || null,
   };
   var url    = id ? '/api/buyers/' + id : '/api/buyers';
   var method = id ? 'PUT' : 'POST';
