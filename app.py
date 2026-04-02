@@ -1661,8 +1661,6 @@ label{font-size:.8rem;color:var(--txs);display:block;margin-bottom:.25rem;}
       <button class="col-btn" data-col="4" onclick="setColumns(4)">4</button>
       <button class="col-btn" data-col="5" onclick="setColumns(5)">5</button>
     </div>
-    <div style="width:1px;height:18px;background:var(--bd);margin:0 4px;"></div>
-    <button id="drag-save-btn" class="text-xs px-3 py-1 rounded border transition hidden" style="color:#fef3c7;border-color:#b45309;background:#92400e;" onclick="saveDragOrder()">💾 儲存排列</button>
   </div>
   <div id="buyer-list" style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;">
     <p class="text-center py-12" style="color:var(--txs);grid-column:1/-1;">載入中…</p>
@@ -2518,7 +2516,7 @@ function _bindDragEvents() {
         } else {
           list.insertBefore(_dragSrcEl, card);
         }
-        _markDirty();
+        saveDragOrder();
       }
     };
 
@@ -2562,7 +2560,7 @@ function _bindDragEvents() {
         } else {
           list.insertBefore(_touchDragEl, overEl);
         }
-        _markDirty();
+        saveDragOrder();
       }
       _touchDragEl.classList.remove('dragging');
       list.querySelectorAll('.drag-over').forEach(function(el) { el.classList.remove('drag-over'); });
@@ -2579,7 +2577,6 @@ function _bindDragEvents() {
 function saveDragOrder() {
   var list = document.getElementById('buyer-list');
   var order = Array.from(list.querySelectorAll('.card[data-id]')).map(function(el) { return el.dataset.id; });
-  // 存到後端
   fetch('/api/buyers/sort-order', {
     method: 'PUT',
     headers: {'Content-Type': 'application/json'},
@@ -2587,14 +2584,12 @@ function saveDragOrder() {
   }).then(function(r) { return r.json(); }).then(function(d) {
     if (d.ok) {
       _savedCustomOrder = order;
-      toast('排列順序已儲存', 'success');
-      // 自動切換排序到「自訂排列」，隱藏儲存按鈕
+      // 自動切換排序到「自訂排列」
       document.getElementById('buyer-sort').value = 'custom';
-      document.getElementById('drag-save-btn').classList.add('hidden');
     } else {
-      toast(d.error || '儲存失敗', 'error');
+      toast(d.error || '排列儲存失敗', 'error');
     }
-  }).catch(function() { toast('儲存失敗', 'error'); });
+  }).catch(function() { toast('排列儲存失敗', 'error'); });
 }
 
 // 儲存從後端載入的自訂排列
