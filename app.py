@@ -2476,10 +2476,6 @@ var _isDragging = false;     // 區分「真正拖曳」vs「普通點擊」
 var _touchDragEl = null;     // 觸控拖曳用
 var _touchMoved = false;     // 觸控是否有移動（區分 tap vs drag）
 
-// 有發生拖動 → 顯示儲存按鈕
-function _markDirty() {
-  document.getElementById('drag-save-btn').classList.remove('hidden');
-}
 
 function _bindDragEvents() {
   var list = document.getElementById('buyer-list');
