@@ -1783,7 +1783,7 @@ label{font-size:.8rem;color:var(--txs);display:block;margin-bottom:.25rem;}
         <div>
           <button type="button" class="btn-ghost text-sm" onclick="document.getElementById('bm-photo-file').click()">📷 上傳照片</button>
           <button type="button" id="bm-photo-clear" class="text-xs hidden" style="color:var(--dg);margin-left:8px;" onclick="bmClearPhoto()">移除</button>
-          <p class="text-xs mt-1" style="color:var(--txm);">支援 JPG / PNG，自動裁切圓形</p>
+          <p class="text-xs mt-1" style="color:var(--txm);">支援 JPG / PNG，或直接 Cmd+V 貼上</p>
         </div>
       </div>
       <input type="file" id="bm-photo-file" accept="image/*" style="display:none;" onchange="bmPickPhoto(this)">
@@ -2448,9 +2448,13 @@ function buyerFilter() {
           return parts.length ? '<p class="text-xs mt-1" style="color:var(--txm);">' + parts.join('　') + '</p>' : '';
         })()
       + '</div>'
-      + '<div class="flex flex-col gap-1 ml-3 flex-shrink-0">'
-      + '<button class="btn-ghost text-xs py-1" onclick="event.stopPropagation();buyerOpenEdit(\'' + b.id + '\')">編輯</button>'
-      + '<button class="text-xs py-1 px-2 rounded border transition" style="color:var(--dg);border-color:var(--bd);" onclick="event.stopPropagation();buyerDelete(\'' + b.id + '\',\'' + esc(b.name) + '\')">刪除</button>'
+      + '<div class="flex flex-col gap-1 ml-2 flex-shrink-0">'
+      + '<button title="編輯" style="width:30px;height:30px;border-radius:8px;border:1px solid var(--bd);background:transparent;display:flex;align-items:center;justify-content:center;cursor:pointer;" onclick="event.stopPropagation();buyerOpenEdit(\'' + b.id + '\')">'
+      + '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color:var(--txs);"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>'
+      + '</button>'
+      + '<button title="刪除" style="width:30px;height:30px;border-radius:8px;border:1px solid var(--bd);background:transparent;display:flex;align-items:center;justify-content:center;cursor:pointer;" onclick="event.stopPropagation();buyerDelete(\'' + b.id + '\',\'' + esc(b.name) + '\')">'
+      + '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color:var(--dg);"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg>'
+      + '</button>'
       + '</div></div></div>';
   }).join('');
   // 渲染完後永遠綁定拖曳事件（不需進入拖曳模式）
@@ -2629,14 +2633,12 @@ function pickCardColor(color) {
 }
 
 // ── 買方照片上傳 ──
-function bmPickPhoto(input) {
-  var file = input.files[0];
-  if (!file) return;
+// 共用：接受 Blob/File，裁切正方形 160px 後套用為頭像
+function _bmApplyImageFile(file) {
   var reader = new FileReader();
   reader.onload = function(e) {
     var img = new Image();
     img.onload = function() {
-      // 裁切正方形，縮放至 160px
       var size = 160;
       var canvas = document.createElement('canvas');
       canvas.width = size; canvas.height = size;
@@ -2651,13 +2653,32 @@ function bmPickPhoto(input) {
       document.getElementById('bm-photo-img').style.display = 'block';
       document.getElementById('bm-photo-placeholder').style.display = 'none';
       document.getElementById('bm-photo-clear').classList.remove('hidden');
-      _dirtyModal = 'buyer'; // 標記有變更
+      _dirtyModal = 'buyer';
     };
     img.src = e.target.result;
   };
   reader.readAsDataURL(file);
-  input.value = ''; // 清除，讓同一檔案可再次觸發
 }
+
+function bmPickPhoto(input) {
+  var file = input.files[0];
+  if (!file) return;
+  _bmApplyImageFile(file);
+  input.value = '';
+}
+
+// 貼上圖片（Cmd/Ctrl+V）：只在買方 Modal 開啟時生效
+document.addEventListener('paste', function(e) {
+  if (document.getElementById('buyer-modal').classList.contains('hidden')) return;
+  var items = (e.clipboardData || e.originalEvent.clipboardData).items;
+  for (var i = 0; i < items.length; i++) {
+    if (items[i].type.indexOf('image') !== -1) {
+      _bmApplyImageFile(items[i].getAsFile());
+      e.preventDefault();
+      break;
+    }
+  }
+});
 
 function bmClearPhoto() {
   document.getElementById('bm-photo-b64').value = '';
