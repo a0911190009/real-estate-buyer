@@ -3199,7 +3199,8 @@ function warRender() {
     var showingLink = w.showing_id
       ? '<a href="#" class="war-showing-link text-amber-400 hover:text-amber-300 text-xs underline" data-sid="' + esc(w.showing_id) + '">📋 來源帶看紀錄</a>'
       : '';
-    return '<div class="card hover:border-slate-500 transition">'
+    var cardStyle = w.status === '放棄' ? ' style="background:#f0f0f0;opacity:0.75;"' : '';
+    return '<div class="card hover:border-slate-500 transition"' + cardStyle + '>'
       + '<div class="flex items-start justify-between mb-2">'
       + '<div>'
       + '<div class="flex items-center gap-2 flex-wrap">'
