@@ -12,10 +12,18 @@ Firestore 集合：
 import os
 import json
 import uuid
+import mimetypes
 from datetime import datetime, timezone, timedelta
 
-from flask import Flask, request, session, redirect, jsonify
+from flask import Flask, request, session, redirect, jsonify, Response
 from itsdangerous import URLSafeTimedSerializer, SignatureExpired, BadSignature
+
+# ── GCS 工具 ──
+try:
+    from gcs_helpers import gcs_upload_image, gcs_delete_blob, gcs_serve_blob
+    _GCS_OK = True
+except ImportError:
+    _GCS_OK = False
 
 # ── 讀取 .env ──
 try:
@@ -402,6 +410,109 @@ def api_buyers_sort_order_get():
         return jsonify({"order": []})
     except Exception as e:
         return jsonify({"error": str(e)}), 500
+
+
+# ════════════════════════════════════════════════════════════
+#  買方附件 API（GCS）
+# ════════════════════════════════════════════════════════════
+
+@app.route("/api/buyers/<buyer_id>/files", methods=["POST"])
+def api_buyer_file_upload(buyer_id):
+    """上傳附件到 GCS，metadata 存進 Firestore buyers 文件的 attachments 陣列。"""
+    email, err = _require_user()
+    if err:
+        return jsonify({"error": err[0]}), err[1]
+    if not _GCS_OK:
+        return jsonify({"error": "GCS 模組未載入"}), 503
+    db = _get_db()
+    if db is None:
+        return jsonify({"error": "Firestore 未連線"}), 503
+    try:
+        ref = db.collection("buyers").document(buyer_id)
+        doc = ref.get()
+        if not doc.exists:
+            return jsonify({"error": "買方不存在"}), 404
+        item = doc.to_dict()
+        # 權限檢查
+        if item.get("created_by") != email and not _is_admin(email):
+            return jsonify({"error": "無權限"}), 403
+
+        file = request.files.get("file")
+        if not file:
+            return jsonify({"error": "請選擇檔案"}), 400
+
+        filename = file.filename or "file"
+        ext = os.path.splitext(filename)[1].lower()
+        mime = file.content_type or mimetypes.guess_type(filename)[0] or "application/octet-stream"
+        file_id = str(uuid.uuid4())
+        gcs_path = f"buyer-files/{email}/{buyer_id}/{file_id}{ext}"
+
+        result = gcs_upload_image(gcs_path, file.read(), content_type=mime)
+        if result is None:
+            return jsonify({"error": "上傳 GCS 失敗"}), 500
+
+        attachment = {
+            "id":          file_id,
+            "gcs_path":    gcs_path,
+            "filename":    filename,
+            "mime_type":   mime,
+            "uploaded_at": _now_str(),
+        }
+        # 附加到 attachments 陣列
+        from google.cloud.firestore_v1 import ArrayUnion
+        ref.update({"attachments": ArrayUnion([attachment]), "updated_at": _now_str()})
+        return jsonify({"ok": True, "attachment": attachment})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route("/api/buyers/<buyer_id>/files/<file_id>", methods=["DELETE"])
+def api_buyer_file_delete(buyer_id, file_id):
+    """從 GCS 刪除附件，並從 Firestore attachments 陣列移除。"""
+    email, err = _require_user()
+    if err:
+        return jsonify({"error": err[0]}), err[1]
+    if not _GCS_OK:
+        return jsonify({"error": "GCS 模組未載入"}), 503
+    db = _get_db()
+    if db is None:
+        return jsonify({"error": "Firestore 未連線"}), 503
+    try:
+        ref = db.collection("buyers").document(buyer_id)
+        doc = ref.get()
+        if not doc.exists:
+            return jsonify({"error": "買方不存在"}), 404
+        item = doc.to_dict()
+        if item.get("created_by") != email and not _is_admin(email):
+            return jsonify({"error": "無權限"}), 403
+
+        attachments = item.get("attachments", [])
+        target = next((a for a in attachments if a.get("id") == file_id), None)
+        if not target:
+            return jsonify({"error": "找不到附件"}), 404
+
+        # 刪 GCS
+        gcs_delete_blob(target["gcs_path"])
+        # 從陣列移除
+        from google.cloud.firestore_v1 import ArrayRemove
+        ref.update({"attachments": ArrayRemove([target]), "updated_at": _now_str()})
+        return jsonify({"ok": True})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route("/buyer-file/<path:gcs_path>")
+def buyer_file_serve(gcs_path):
+    """代理讀取 GCS 附件（圖片直接顯示，其他下載）。"""
+    email, err = _require_user()
+    if err:
+        return redirect("/")
+    if not _GCS_OK:
+        return "GCS 未設定", 503
+    result = gcs_serve_blob(gcs_path)
+    if isinstance(result, tuple):
+        return result  # (錯誤訊息, 狀態碼)
+    return result
 
 
 @app.route("/api/buyers/<buyer_id>", methods=["GET"])
@@ -2890,6 +3001,39 @@ function buyerDetail(id) {
       html += '</div>';
     }
     html += '</div>';
+
+    // ── 附件區塊 ──
+    var attachments = b.attachments || [];
+    html += '<div style="margin-top:1.5rem;border-top:1px solid var(--bd);padding-top:1rem;">'
+      + '<div class="flex items-center justify-between mb-3">'
+      + '<h4 class="font-semibold text-sm" style="color:var(--tx);">📎 附件（' + attachments.length + ' 個）</h4>'
+      + '<label class="btn-primary text-xs py-1 px-3" style="cursor:pointer;">'
+      + '＋ 上傳'
+      + '<input type="file" accept="image/*,.pdf,.doc,.docx,.xls,.xlsx" style="display:none;" onchange="buyerFileUpload(this,\'' + id + '\')">'
+      + '</label>'
+      + '</div>';
+    if (!attachments.length) {
+      html += '<p class="text-sm text-center py-4" style="color:var(--txm);">尚無附件</p>';
+    } else {
+      html += '<div class="grid grid-cols-3 gap-2">';
+      attachments.forEach(function(a) {
+        var isImg = (a.mime_type || '').startsWith('image/');
+        var thumb = isImg
+          ? '<img src="/buyer-file/' + a.gcs_path + '" style="width:100%;height:80px;object-fit:cover;border-radius:8px;display:block;">'
+          : '<div style="height:80px;border-radius:8px;background:var(--bg-t);display:flex;align-items:center;justify-content:center;font-size:28px;">'
+            + (a.mime_type === 'application/pdf' ? '📄' : '📎')
+            + '</div>';
+        html += '<div style="position:relative;">'
+          + '<a href="/buyer-file/' + a.gcs_path + '" target="_blank" title="' + esc(a.filename) + '">' + thumb + '</a>'
+          + '<p class="text-xs mt-1 truncate" style="color:var(--txs);" title="' + esc(a.filename) + '">' + esc(a.filename) + '</p>'
+          + '<button onclick="buyerFileDelete(\'' + id + '\',\'' + a.id + '\',this)" '
+          + 'style="position:absolute;top:4px;right:4px;width:22px;height:22px;border-radius:50%;background:rgba(0,0,0,0.55);border:none;color:#fff;font-size:13px;cursor:pointer;display:flex;align-items:center;justify-content:center;line-height:1;">×</button>'
+          + '</div>';
+      });
+      html += '</div>';
+    }
+    html += '</div>';
+
     html += '</div>'; // 關閉 p-6 容器
 
     content.innerHTML = html;
@@ -2898,6 +3042,48 @@ function buyerDetail(id) {
 
 function buyerDetailClose() {
   document.getElementById('buyer-detail-modal').classList.add('hidden');
+}
+
+// ── 附件上傳 ──
+function buyerFileUpload(input, buyerId) {
+  var file = input.files[0];
+  if (!file) return;
+  var fd = new FormData();
+  fd.append('file', file);
+  toast('上傳中…', 'info');
+  fetch('/api/buyers/' + buyerId + '/files', { method: 'POST', body: fd })
+    .then(function(r) { return r.json(); })
+    .then(function(d) {
+      if (d.error) { toast(d.error, 'error'); return; }
+      // 更新本地快取的 attachments
+      var b = _buyers.find(function(x){ return x.id === buyerId; });
+      if (b) {
+        if (!b.attachments) b.attachments = [];
+        b.attachments.push(d.attachment);
+      }
+      toast('上傳成功', 'success');
+      buyerDetail(buyerId); // 重新渲染詳情
+    })
+    .catch(function() { toast('上傳失敗', 'error'); });
+  input.value = '';
+}
+
+// ── 附件刪除 ──
+function buyerFileDelete(buyerId, fileId, btn) {
+  if (!confirm('確定刪除此附件？')) return;
+  fetch('/api/buyers/' + buyerId + '/files/' + fileId, { method: 'DELETE' })
+    .then(function(r) { return r.json(); })
+    .then(function(d) {
+      if (d.error) { toast(d.error, 'error'); return; }
+      // 更新本地快取
+      var b = _buyers.find(function(x){ return x.id === buyerId; });
+      if (b && b.attachments) {
+        b.attachments = b.attachments.filter(function(a){ return a.id !== fileId; });
+      }
+      toast('已刪除', 'success');
+      buyerDetail(buyerId);
+    })
+    .catch(function() { toast('刪除失敗', 'error'); });
 }
 
 // ═══════════════════════════
