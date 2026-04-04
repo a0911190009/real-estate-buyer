@@ -232,11 +232,15 @@ def auth_portal_login():
     email = payload.get("email", "")
     if not email:
         return redirect(PORTAL_URL or "/")
+    tab = request.args.get("tab") or request.form.get("tab", "")
     session.permanent = True  # 讓 cookie 帶 30 天到期日，手機不會被清除
     session["user_email"] = email
     session["user_name"]  = payload.get("name", "")
     session["user_picture"] = payload.get("picture", "")
     session.modified = True
+    # 有指定分頁時，redirect 到 /?tab=xxx（同域 redirect，SameSite 不影響）
+    if tab:
+        return redirect(f"/?tab={tab}")
     # 直接 render 首頁（不做任何 redirect），Set-Cookie 與 HTML 在同一個 response
     # 避免 Chrome SameSite 問題：跨站 redirect 後瀏覽器帶不到剛設的 cookie
     return _render_index(email)
@@ -3772,6 +3776,16 @@ _watchDirty('buyer-modal',   'buyer');
 _watchDirty('contact-modal', 'contact');
 _watchDirty('war-modal',     'war');
 _watchDirty('showing-modal', 'showing');
+
+// 若有 URL 參數 ?tab=xxx，啟動時自動切到指定分頁
+(function() {
+  var _tp = new URLSearchParams(window.location.search).get('tab');
+  var _allowed = ['buyers','war','showings'];
+  if (_tp && _allowed.indexOf(_tp) >= 0) {
+    setTimeout(function() { switchTab(_tp); }, 300);
+    history.replaceState(null, '', window.location.pathname);
+  }
+})();
 
 // 若有 URL 參數 ?action=showing，自動開啟帶看 Modal
 (function() {
