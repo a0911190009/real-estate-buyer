@@ -1390,6 +1390,7 @@ body{background:var(--bg-p);color:var(--tx);font-family:'Noto Sans TC','Segoe UI
 .badge-gray{background:#374151;color:#9ca3af;}
 .badge-amber{background:#92400e;color:#fde68a;}
 .badge-purple{background:#6b21a8;color:#e9d5ff;}
+.badge-teal{background:#0f766e;color:#99f6e4;}
 .badge-role{background:var(--tg);color:var(--tgt);}
 /* ══ 欄數切換按鈕 ══ */
 .col-btn{width:28px;height:28px;border-radius:6px;border:1px solid var(--bd);background:transparent;color:var(--txs);font-size:12px;font-weight:600;cursor:pointer;transition:all .15s;}
@@ -1784,6 +1785,7 @@ label{font-size:.8rem;color:var(--txs);display:block;margin-bottom:.25rem;}
       <option value="洽談中">洽談中</option>
       <option value="持續看物件">持續看物件</option>
       <option value="暫無需求">暫無需求</option>
+      <option value="保持連繫">保持連繫</option>
       <option value="成交">成交</option>
       <option value="流失">流失</option>
     </select>
@@ -1909,6 +1911,7 @@ label{font-size:.8rem;color:var(--txs);display:block;margin-bottom:.25rem;}
         <option value="洽談中">洽談中</option>
         <option value="持續看物件">持續看物件</option>
         <option value="暫無需求">暫無需求</option>
+        <option value="保持連繫">保持連繫</option>
         <option value="成交">成交</option>
         <option value="流失">流失</option>
       </select>
@@ -2263,7 +2266,7 @@ function fmtSize(min, max) {
   return min + '～' + max + ' 坪';
 }
 function statusBadge(s) {
-  var map = {'洽談中':'badge-blue','持續看物件':'badge-purple','暫無需求':'badge-amber','成交':'badge-green','流失':'badge-gray'};
+  var map = {'洽談中':'badge-blue','持續看物件':'badge-purple','暫無需求':'badge-amber','保持連繫':'badge-teal','成交':'badge-green','流失':'badge-gray'};
   return '<span class="badge ' + (map[s]||'badge-gray') + '">' + esc(s) + '</span>';
 }
 function warStatusBadge(s) {
