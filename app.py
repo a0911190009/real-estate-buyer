@@ -3217,8 +3217,57 @@ var _wars = [];
 function warLoad() {
   fetch('/api/war').then(r => r.json()).then(d => {
     _wars = d.items || [];
+    // 同步重建快查 map，讓帶看 tab 的斡旋 badge 也能即時反映最新狀態
+    _warBuyerIds = new Set(); _warByShowingId = {}; _warByBuyerId = {};
+    _wars.filter(_isActiveWar).forEach(function(w) {
+      if (w.buyer_id)   { _warBuyerIds.add(w.buyer_id); _warByBuyerId[w.buyer_id] = w; }
+      if (w.showing_id) { _warByShowingId[w.showing_id] = w; }
+    });
     warRender();
   }).catch(e => toast('載入戰況失敗', 'error'));
+}
+
+// 結案狀態集合
+var _WAR_CLOSED = new Set(['成交', '放棄']);
+
+// 產生單一斡旋卡片的 HTML
+function _warCardHtml(w) {
+  var libLink = (LIBRARY_URL && w.prop_name)
+    ? '<a href="' + LIBRARY_URL + '?prop_name=' + encodeURIComponent(w.prop_name) + '" target="_blank" class="text-blue-400 hover:text-blue-300 text-xs underline ml-2">物件庫↗</a>'
+    : '';
+  var showingLink = w.showing_id
+    ? '<a href="#" class="war-showing-link text-amber-400 hover:text-amber-300 text-xs underline" data-sid="' + esc(w.showing_id) + '">📋 來源帶看紀錄</a>'
+    : '';
+  // 已結案卡片用淺灰背景
+  var cardStyle = _WAR_CLOSED.has(w.status) ? ' style="background:#f0f0f0;opacity:0.75;"' : '';
+  return '<div class="card hover:border-slate-500 transition"' + cardStyle + '>'
+    + '<div class="flex items-start justify-between mb-2">'
+    + '<div>'
+    + '<div class="flex items-center gap-2 flex-wrap">'
+    + '<span class="font-semibold" style="color:var(--tx);">' + esc(w.prop_name) + '</span>'
+    + warStatusBadge(w.status) + libLink
+    + '</div>'
+    + (w.prop_address ? '<p class="text-xs mt-0.5" style="color:var(--txs);">' + esc(w.prop_address) + '</p>' : '')
+    + '</div>'
+    + '<div class="flex gap-2 flex-shrink-0 ml-2">'
+    + '<button class="btn-ghost text-xs py-1" onclick="warOpenEdit(\'' + w.id + '\')">編輯</button>'
+    + '<button class="text-xs py-1 px-2 rounded border transition" style="color:var(--dg);border-color:var(--bd);" onclick="warDelete(\'' + w.id + '\',\'' + esc(w.prop_name) + '\')">刪除</button>'
+    + '</div></div>'
+    + '<div class="grid grid-cols-3 gap-2 text-xs mt-2" style="color:var(--txs);">'
+    + '<div class="rounded-lg p-2" style="background:var(--bg-t);"><span class="block" style="color:var(--txm);">公告</span>' + (w.prop_price != null ? w.prop_price + '萬' : '—') + '</div>'
+    + '<div class="rounded-lg p-2" style="background:var(--bg-t);"><span class="block" style="color:var(--txm);">承購</span>' + (w.purchase_price != null ? '<span style="color:var(--ac);font-weight:600;">' + w.purchase_price + '萬</span>' : (w.my_offer != null ? '<span style="color:var(--ac);">' + w.my_offer + '萬</span>' : '—')) + '</div>'
+    + '<div class="rounded-lg p-2" style="background:var(--bg-t);"><span class="block" style="color:var(--txm);">底價</span>' + (w.floor_price != null ? '<span style="color:var(--warn);font-weight:600;">' + w.floor_price + '萬</span>' : '—') + '</div>'
+    + '</div>'
+    + (w.war_no ? '<p class="text-xs mt-1" style="color:var(--txm);">編號：' + esc(w.war_no) + '</p>' : '')
+    + (w.deposit_amount != null ? '<p class="text-xs mt-1" style="color:var(--txs);">斡旋金：<span style="color:var(--tx);">' + w.deposit_amount + '萬</span>'
+        + (w.deposit_type ? '　<span style="color:var(--txm);">' + esc(w.deposit_type) + '</span>' : '')
+        + (w.expire_date ? '　到期：<span style="color:var(--txs);">' + esc(w.expire_date) + '</span>' : '')
+        + (w.contract_change_expire ? '　<span style="color:var(--warn);">（契變→' + esc(w.contract_change_expire) + '）</span>' : '') + '</p>' : '')
+    + (w.buyer_name ? '<p class="text-xs mt-1" style="color:var(--txs);">買方：<span style="color:var(--tx);">' + esc(w.buyer_name) + '</span>'
+        + (w.buyer_phone ? '　' + esc(w.buyer_phone) : '') + '</p>' : '')
+    + (showingLink ? '<p class="mt-1">' + showingLink + '</p>' : '')
+    + (w.note ? '<p class="text-xs mt-1 rounded p-2" style="color:var(--txs);background:var(--bg-t);">' + esc(w.note) + '</p>' : '')
+    + '</div>';
 }
 
 function warRender() {
@@ -3227,45 +3276,35 @@ function warRender() {
     list.innerHTML = '<div class="text-center py-16" style="color:var(--txs);"><div class="text-5xl mb-3">🕊️</div><p class="text-lg" style="color:var(--txs);">目前沒有斡旋物件</p></div>';
     return;
   }
-  list.innerHTML = _wars.map(function(w) {
-    // 物件庫連結：跳到物件庫並帶案名，讓物件庫直接搜尋定位
-    var libLink = (LIBRARY_URL && w.prop_name)
-      ? '<a href="' + LIBRARY_URL + '?prop_name=' + encodeURIComponent(w.prop_name) + '" target="_blank" class="text-blue-400 hover:text-blue-300 text-xs underline ml-2">物件庫↗</a>'
-      : '';
-    // 來源帶看紀錄連結：用 data-sid 傳 showing_id，避免引號問題
-    var showingLink = w.showing_id
-      ? '<a href="#" class="war-showing-link text-amber-400 hover:text-amber-300 text-xs underline" data-sid="' + esc(w.showing_id) + '">📋 來源帶看紀錄</a>'
-      : '';
-    var cardStyle = w.status === '放棄' ? ' style="background:#f0f0f0;opacity:0.75;"' : '';
-    return '<div class="card hover:border-slate-500 transition"' + cardStyle + '>'
-      + '<div class="flex items-start justify-between mb-2">'
-      + '<div>'
-      + '<div class="flex items-center gap-2 flex-wrap">'
-      + '<span class="font-semibold" style="color:var(--tx);">' + esc(w.prop_name) + '</span>'
-      + warStatusBadge(w.status) + libLink
+
+  // 分組：進行中 vs 已結案
+  var active = _wars.filter(function(w) { return !_WAR_CLOSED.has(w.status); });
+  var closed = _wars.filter(function(w) { return _WAR_CLOSED.has(w.status); });
+
+  var html = '';
+
+  // 進行中案件
+  if (active.length) {
+    html += active.map(_warCardHtml).join('');
+  } else {
+    html += '<div class="text-center py-8" style="color:var(--txs);">目前無進行中案件</div>';
+  }
+
+  // 已結案折疊區塊
+  if (closed.length) {
+    html += '<div class="mt-6">'
+      + '<button onclick="warToggleClosed()" class="flex items-center gap-2 w-full text-left py-2 px-3 rounded-lg transition" style="background:var(--bg-t);color:var(--txs);">'
+      + '<span id="war-closed-arrow" style="transition:transform 0.2s;">▶</span>'
+      + '<span class="text-sm font-semibold">已結案</span>'
+      + '<span class="text-xs ml-1 px-2 py-0.5 rounded-full" style="background:var(--bd);color:var(--txm);">' + closed.length + '</span>'
+      + '</button>'
+      + '<div id="war-closed-list" class="mt-2 space-y-3" style="display:none;">'
+      + closed.map(_warCardHtml).join('')
       + '</div>'
-      + (w.prop_address ? '<p class="text-xs mt-0.5" style="color:var(--txs);">' + esc(w.prop_address) + '</p>' : '')
-      + '</div>'
-      + '<div class="flex gap-2 flex-shrink-0 ml-2">'
-      + '<button class="btn-ghost text-xs py-1" onclick="warOpenEdit(\'' + w.id + '\')">編輯</button>'
-      + '<button class="text-xs py-1 px-2 rounded border transition" style="color:var(--dg);border-color:var(--bd);" onclick="warDelete(\'' + w.id + '\',\'' + esc(w.prop_name) + '\')">刪除</button>'
-      + '</div></div>'
-      + '<div class="grid grid-cols-3 gap-2 text-xs mt-2" style="color:var(--txs);">'
-      + '<div class="rounded-lg p-2" style="background:var(--bg-t);"><span class="block" style="color:var(--txm);">公告</span>' + (w.prop_price != null ? w.prop_price + '萬' : '—') + '</div>'
-      + '<div class="rounded-lg p-2" style="background:var(--bg-t);"><span class="block" style="color:var(--txm);">承購</span>' + (w.purchase_price != null ? '<span style="color:var(--ac);font-weight:600;">' + w.purchase_price + '萬</span>' : (w.my_offer != null ? '<span style="color:var(--ac);">' + w.my_offer + '萬</span>' : '—')) + '</div>'
-      + '<div class="rounded-lg p-2" style="background:var(--bg-t);"><span class="block" style="color:var(--txm);">底價</span>' + (w.floor_price != null ? '<span style="color:var(--warn);font-weight:600;">' + w.floor_price + '萬</span>' : '—') + '</div>'
-      + '</div>'
-      + (w.war_no ? '<p class="text-xs mt-1" style="color:var(--txm);">編號：' + esc(w.war_no) + '</p>' : '')
-      + (w.deposit_amount != null ? '<p class="text-xs mt-1" style="color:var(--txs);">斡旋金：<span style="color:var(--tx);">' + w.deposit_amount + '萬</span>'
-          + (w.deposit_type ? '　<span style="color:var(--txm);">' + esc(w.deposit_type) + '</span>' : '')
-          + (w.expire_date ? '　到期：<span style="color:var(--txs);">' + esc(w.expire_date) + '</span>' : '')
-          + (w.contract_change_expire ? '　<span style="color:var(--warn);">（契變→' + esc(w.contract_change_expire) + '）</span>' : '') + '</p>' : '')
-      + (w.buyer_name ? '<p class="text-xs mt-1" style="color:var(--txs);">買方：<span style="color:var(--tx);">' + esc(w.buyer_name) + '</span>'
-          + (w.buyer_phone ? '　' + esc(w.buyer_phone) : '') + '</p>' : '')
-      + (showingLink ? '<p class="mt-1">' + showingLink + '</p>' : '')
-      + (w.note ? '<p class="text-xs mt-1 rounded p-2" style="color:var(--txs);background:var(--bg-t);">' + esc(w.note) + '</p>' : '')
       + '</div>';
-  }).join('');
+  }
+
+  list.innerHTML = html;
 
   // 「來源帶看紀錄」連結事件（用事件委派，避免 onclick 引號問題）
   list.querySelectorAll('.war-showing-link').forEach(function(a) {
@@ -3279,6 +3318,16 @@ function warRender() {
       }, 400);
     });
   });
+}
+
+// 切換已結案折疊區塊的展開/收合
+function warToggleClosed() {
+  var box = document.getElementById('war-closed-list');
+  var arrow = document.getElementById('war-closed-arrow');
+  if (!box) return;
+  var isOpen = box.style.display !== 'none';
+  box.style.display = isOpen ? 'none' : 'block';
+  arrow.style.transform = isOpen ? '' : 'rotate(90deg)';
 }
 
 // 清空戰況 Modal 所有欄位
