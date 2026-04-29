@@ -150,6 +150,26 @@ def _now_str():
 
 VALID_THEME_STYLES = ["navy", "forest", "amber", "minimal", "rose", "oled"]
 
+
+# ── LOG 工具函式 ──
+def log_event(event_type, user_id="", detail=None):
+    """記錄業務事件，輸出至 Cloud Logging（Cloud Run stdout 自動收集）。"""
+    print(json.dumps({
+        "time": datetime.now(timezone.utc).isoformat(),
+        "event": event_type,   # 事件名稱，例如 "buyer_add"
+        "user": user_id,
+        "detail": detail or {}
+    }, ensure_ascii=False), flush=True)
+
+
+@app.route("/api/client-log", methods=["POST"])
+def api_client_log():
+    """接收前端 JS 錯誤，記錄至 Cloud Logging。"""
+    data = request.get_json(silent=True) or {}
+    log_event("client_error", detail=data)
+    return jsonify({"ok": True})
+
+
 @app.route("/api/theme", methods=["GET"])
 def api_theme_get():
     db = _get_db()
@@ -346,6 +366,7 @@ def api_buyers_create():
         return jsonify({"error": "Firestore 未連線"}), 503
     try:
         data = request.get_json(force=True) or {}
+        log_event("buyer_create", user_id=email, detail={"name": str(data.get("name", ""))[:30]})
         doc = {
             "name":        str(data.get("name", "")).strip(),
             "phone":       str(data.get("phone", "")).strip(),
@@ -1576,6 +1597,15 @@ label{font-size:.8rem;color:var(--txs);display:block;margin-bottom:.25rem;}
   color: var(--ok);
 }
 </style>
+<script>
+/* 前端錯誤自動回報至 Cloud Logging */
+window.onerror = function(msg, src, line, col, err) {
+    fetch('/api/client-log', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({type: 'js_error', msg: msg, src: src, line: line, viewport: window.innerWidth + 'x' + window.innerHeight})}).catch(function(){});
+};
+window.addEventListener('unhandledrejection', function(e) {
+    fetch('/api/client-log', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({type: 'promise_error', msg: String(e.reason), viewport: window.innerWidth + 'x' + window.innerHeight})}).catch(function(){});
+});
+</script>
 </head>
 <body data-theme="navy-dark">
 
