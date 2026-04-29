@@ -558,6 +558,8 @@ def api_buyer_get(buyer_id):
         # 權限：自己建立的或管理員
         if not _is_admin(email) and item.get("created_by") != email:
             return jsonify({"error": "無權限"}), 403
+        # 記錄查看買方詳細資料
+        log_event("buyer_view", user_id=email, detail={"buyer_id": buyer_id})
         return jsonify(item)
     except Exception as e:
         return jsonify({"error": str(e)}), 500
