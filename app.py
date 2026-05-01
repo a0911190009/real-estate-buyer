@@ -3078,7 +3078,7 @@ function buyerDetail(id) {
       + '<h4 class="font-semibold text-sm" style="color:var(--tx);">📎 附件（' + attachments.length + ' 個）</h4>'
       + '<label class="btn-primary text-xs py-1 px-3" style="cursor:pointer;">'
       + '＋ 上傳'
-      + '<input type="file" accept="image/*,.pdf,.doc,.docx,.xls,.xlsx" style="display:none;" onchange="buyerFileUpload(this,\'' + id + '\')">'
+      + '<input type="file" accept="image/*,audio/*,.pdf,.doc,.docx,.xls,.xlsx,.m4a,.mp3,.wav,.aac" style="display:none;" onchange="buyerFileUpload(this,\'' + id + '\')">'
       + '</label>'
       + '</div>';
     if (!attachments.length) {
@@ -3086,15 +3086,27 @@ function buyerDetail(id) {
     } else {
       html += '<div class="grid grid-cols-3 gap-2">';
       attachments.forEach(function(a) {
-        var isImg = (a.mime_type || '').startsWith('image/');
-        var thumb = isImg
-          ? '<img src="/buyer-file/' + a.gcs_path + '" style="width:100%;height:80px;object-fit:cover;border-radius:8px;display:block;">'
-          : '<div style="height:80px;border-radius:8px;background:var(--bg-t);display:flex;align-items:center;justify-content:center;font-size:28px;">'
-            + (a.mime_type === 'application/pdf' ? '📄' : '📎')
+        var mime = a.mime_type || '';
+        var isImg   = mime.startsWith('image/');
+        var isAudio = mime.startsWith('audio/');
+        var thumb;
+        if (isImg) {
+          // 圖片：顯示縮圖
+          thumb = '<img src="/buyer-file/' + a.gcs_path + '" style="width:100%;height:80px;object-fit:cover;border-radius:8px;display:block;">';
+        } else if (isAudio) {
+          // 錄音檔：顯示音樂圖示，下方額外嵌入 audio 播放器（覆寫 thumb 流程）
+          thumb = '<div style="height:80px;border-radius:8px;background:var(--bg-t);display:flex;align-items:center;justify-content:center;font-size:28px;">🎵</div>';
+        } else {
+          // 其他檔案：PDF 顯示 📄，其餘顯示 📎
+          thumb = '<div style="height:80px;border-radius:8px;background:var(--bg-t);display:flex;align-items:center;justify-content:center;font-size:28px;">'
+            + (mime === 'application/pdf' ? '📄' : '📎')
             + '</div>';
+        }
         html += '<div style="position:relative;">'
           + '<a href="/buyer-file/' + a.gcs_path + '" target="_blank" title="' + esc(a.filename) + '">' + thumb + '</a>'
           + '<p class="text-xs mt-1 truncate" style="color:var(--txs);" title="' + esc(a.filename) + '">' + esc(a.filename) + '</p>'
+          // 錄音檔：附件名稱下方嵌入 audio 播放器，不需另開分頁
+          + (isAudio ? '<audio controls preload="none" src="/buyer-file/' + a.gcs_path + '" style="width:100%;margin-top:4px;height:32px;"></audio>' : '')
           + '<button onclick="buyerFileDelete(\'' + id + '\',\'' + a.id + '\',this)" '
           + 'style="position:absolute;top:4px;right:4px;width:22px;height:22px;border-radius:50%;background:rgba(0,0,0,0.55);border:none;color:#fff;font-size:13px;cursor:pointer;display:flex;align-items:center;justify-content:center;line-height:1;">×</button>'
           + '</div>';
