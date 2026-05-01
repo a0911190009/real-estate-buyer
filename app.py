@@ -25,6 +25,13 @@ try:
 except ImportError:
     _GCS_OK = False
 
+# ── Gemini AI（錄音轉文字 + 摘要） ──
+try:
+    import google.generativeai as genai
+    _GEMINI_OK = True
+except ImportError:
+    _GEMINI_OK = False
+
 # ── 讀取 .env ──
 try:
     from dotenv import load_dotenv
@@ -438,6 +445,44 @@ def api_buyers_sort_order_get():
 
 
 # ════════════════════════════════════════════════════════════
+#  錄音檔轉文字 + 摘要（Gemini）
+# ════════════════════════════════════════════════════════════
+def _transcribe_audio(audio_bytes: bytes, mime_type: str) -> dict:
+    """
+    將錄音檔丟給 Gemini，取得逐字稿、摘要、關鍵字。
+    回傳：{"transcript": str, "summary": str, "keywords": [str]} 或 None（失敗）
+    """
+    if not _GEMINI_OK:
+        return None
+    api_key = os.environ.get("GOOGLE_API_KEY")
+    if not api_key:
+        return None
+    try:
+        genai.configure(api_key=api_key)
+        model = genai.GenerativeModel("gemini-2.0-flash")
+        prompt = (
+            "你是房仲業務助理。請聽這段錄音（可能是與買方的對話、看房筆記或備忘），"
+            "用繁體中文（台灣）回傳 JSON：\n"
+            '{"transcript": "完整逐字稿", "summary": "1~2 句重點摘要", "keywords": ["3~6 個關鍵字"]}\n'
+            "只回 JSON，不要 markdown code block。"
+        )
+        cfg = genai.types.GenerationConfig(response_mime_type="application/json")
+        response = model.generate_content(
+            [{"mime_type": mime_type, "data": audio_bytes}, prompt],
+            generation_config=cfg,
+        )
+        data = json.loads(response.text)
+        return {
+            "transcript": data.get("transcript", "") or "",
+            "summary":    data.get("summary", "") or "",
+            "keywords":   data.get("keywords", []) or [],
+        }
+    except Exception as e:
+        print(f"[transcribe] 失敗：{e}")
+        return None
+
+
+# ════════════════════════════════════════════════════════════
 #  買方附件 API（GCS）
 # ════════════════════════════════════════════════════════════
 
@@ -472,7 +517,10 @@ def api_buyer_file_upload(buyer_id):
         file_id = str(uuid.uuid4())
         gcs_path = f"buyer-files/{email}/{buyer_id}/{file_id}{ext}"
 
-        result = gcs_upload_image(gcs_path, file.read(), content_type=mime)
+        # 讀檔內容（之後可能要丟給 Gemini，所以一次讀完）
+        file_bytes = file.read()
+
+        result = gcs_upload_image(gcs_path, file_bytes, content_type=mime)
         if result is None:
             return jsonify({"error": "上傳 GCS 失敗"}), 500
 
@@ -483,6 +531,14 @@ def api_buyer_file_upload(buyer_id):
             "mime_type":   mime,
             "uploaded_at": _now_str(),
         }
+
+        # 若是音訊檔，自動呼叫 Gemini 產生逐字稿 + 摘要 + 關鍵字
+        if mime.startswith("audio/"):
+            ai = _transcribe_audio(file_bytes, mime)
+            if ai:
+                attachment["transcript"] = ai["transcript"]
+                attachment["summary"]    = ai["summary"]
+                attachment["keywords"]   = ai["keywords"]
         # 附加到 attachments 陣列
         from google.cloud.firestore_v1 import ArrayUnion
         ref.update({"attachments": ArrayUnion([attachment]), "updated_at": _now_str()})
@@ -3102,11 +3158,30 @@ function buyerDetail(id) {
             + (mime === 'application/pdf' ? '📄' : '📎')
             + '</div>';
         }
+        // 錄音檔的 AI 摘要區塊
+        var aiBlock = '';
+        if (isAudio && a.summary) {
+          var kwHtml = (a.keywords && a.keywords.length)
+            ? '<div class="mt-1" style="font-size:10px;">' + a.keywords.map(function(k){
+                return '<span style="display:inline-block;background:var(--bd);color:var(--txm);padding:1px 6px;border-radius:9999px;margin-right:3px;margin-bottom:2px;">' + esc(k) + '</span>';
+              }).join('') + '</div>'
+            : '';
+          var transcriptHtml = a.transcript
+            ? '<details class="mt-1" style="font-size:11px;color:var(--txs);"><summary style="cursor:pointer;color:var(--txm);">逐字稿</summary><p class="mt-1" style="white-space:pre-wrap;">' + esc(a.transcript) + '</p></details>'
+            : '';
+          aiBlock = '<div class="mt-1 p-2 rounded" style="background:var(--bg-t);font-size:11px;color:var(--tx);">'
+            + '<div style="font-weight:600;color:var(--ac);font-size:10px;margin-bottom:2px;">📝 摘要</div>'
+            + esc(a.summary)
+            + kwHtml
+            + transcriptHtml
+            + '</div>';
+        }
         html += '<div style="position:relative;">'
           + '<a href="/buyer-file/' + a.gcs_path + '" target="_blank" title="' + esc(a.filename) + '">' + thumb + '</a>'
           + '<p class="text-xs mt-1 truncate" style="color:var(--txs);" title="' + esc(a.filename) + '">' + esc(a.filename) + '</p>'
           // 錄音檔：附件名稱下方嵌入 audio 播放器，不需另開分頁
           + (isAudio ? '<audio controls preload="none" src="/buyer-file/' + a.gcs_path + '" style="width:100%;margin-top:4px;height:32px;"></audio>' : '')
+          + aiBlock
           + '<button onclick="buyerFileDelete(\'' + id + '\',\'' + a.id + '\',this)" '
           + 'style="position:absolute;top:4px;right:4px;width:22px;height:22px;border-radius:50%;background:rgba(0,0,0,0.55);border:none;color:#fff;font-size:13px;cursor:pointer;display:flex;align-items:center;justify-content:center;line-height:1;">×</button>'
           + '</div>';
