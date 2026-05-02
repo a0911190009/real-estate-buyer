@@ -72,6 +72,10 @@ def _get_db():
 
 # ── Flask ──
 app = Flask(__name__)
+
+# 跨工具回饋系統
+from feedback_endpoint import bp as _feedback_bp
+app.register_blueprint(_feedback_bp)
 _secret = os.environ.get("FLASK_SECRET_KEY", "")
 if not _secret:
     # 允許啟動，但 session 功能不安全（部署後立即補環境變數即可）
@@ -4290,6 +4294,9 @@ function closeMoreMenu(){ toggleMoreMenu(); }
       <div class="gf-toast" id="gf-toast" style="display:none;"></div>
     </div>
   </div>
+  <link rel="stylesheet" href="https://real-estate-portal-334765337861.asia-east1.run.app/static/feedback-widget.css">
+  <script src="https://real-estate-portal-334765337861.asia-east1.run.app/static/feedback-widget.js"></script>
+  <script>FeedbackWidget.init({ tool: 'buyer' });</script>
 </body>
 </html>"""
 
