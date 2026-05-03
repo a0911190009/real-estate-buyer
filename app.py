@@ -4297,6 +4297,23 @@ function closeMoreMenu(){ toggleMoreMenu(); }
   <link rel="stylesheet" href="https://real-estate-portal-334765337861.asia-east1.run.app/static/feedback-widget.css">
   <script src="https://real-estate-portal-334765337861.asia-east1.run.app/static/feedback-widget.js"></script>
   <script>FeedbackWidget.init({ tool: 'buyer' });</script>
+  <link rel="stylesheet" href="https://real-estate-portal-334765337861.asia-east1.run.app/static/upload-menu.css">
+  <script src="https://real-estate-portal-334765337861.asia-east1.run.app/static/upload-menu.js"></script>
+  <script>
+    /* 右鍵 / 長按選單：買方照片 + 動態渲染的附件區（透過事件委派） */
+    document.addEventListener('DOMContentLoaded', function() {
+      if (!window.UploadMenu) return;
+      // 買方照片預覽圈
+      var photoPreview = document.getElementById('bm-photo-preview');
+      if (photoPreview) {
+        window.UploadMenu.attach(photoPreview, {
+          paste: true, file: true, camera: true,
+          accept: 'image/*', multiple: false,
+          targetInput: '#bm-photo-file',  // 灌進此 input 並觸發 change（自動跑既有 bmPickPhoto）
+        });
+      }
+    });
+  </script>
 </body>
 </html>"""
 
