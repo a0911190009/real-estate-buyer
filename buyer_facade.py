@@ -69,6 +69,16 @@ def _to_files_list(files_docs) -> list[dict]:
     return items
 
 
+def _normalize_avatar(avatar_b64):
+    """確保 avatar 是完整 data URL 格式（BUYER 前端 src=值 時才能顯示）。"""
+    if not avatar_b64:
+        return None
+    if isinstance(avatar_b64, str) and avatar_b64.startswith("data:"):
+        return avatar_b64
+    # 純 base64 → 補上 jpeg 前綴
+    return "data:image/jpeg;base64," + avatar_b64
+
+
 def person_to_buyer(person: dict, role: dict | None, files: list[dict]) -> dict:
     """把 PEOPLE doc + roles/buyer doc + files 陣列 → BUYER API 格式。"""
     role = role or {}
@@ -84,7 +94,7 @@ def person_to_buyer(person: dict, role: dict | None, files: list[dict]) -> dict:
         "phone":       person.get("phone", "") or "",
         "note":        person.get("note", "") or "",
         "card_color":  person.get("card_color", "") or "",
-        "photo_b64":   person.get("avatar_b64"),
+        "photo_b64":   _normalize_avatar(person.get("avatar_b64")),
         # 買方專屬欄位 → role
         "budget_min":  role.get("budget_min"),
         "budget_max":  role.get("budget_max"),
@@ -315,8 +325,8 @@ def update_buyer(db, person_id: str, email: str, is_admin: bool, data: dict, ser
 
 
 def archive_buyer(db, person_id: str, email: str, is_admin: bool, server_timestamp_fn) -> bool:
-    """『刪除買方』 = archive roles/buyer + 從 active_roles 移除 buyer。
-    主檔保留（人脈管理仍看得到）。
+    """『撕去買方標籤』= archive roles/buyer + 從 active_roles 移除 buyer。
+    主檔保留（人脈管理仍看得到此人，只是少了買方標籤）。
     """
     ref = db.collection("people").document(person_id)
     snap = ref.get()
@@ -334,4 +344,22 @@ def archive_buyer(db, person_id: str, email: str, is_admin: bool, server_timesta
     # 從 active_roles 移除 buyer
     active = [r for r in (person.get("active_roles") or []) if r != "buyer"]
     ref.update({"active_roles": active, "updated_at": server_timestamp_fn()})
+    return True
+
+
+def soft_delete_person(db, person_id: str, email: str, is_admin: bool, server_timestamp_fn) -> bool:
+    """『連人脈一起刪』= 軟刪除整個 person（設 deleted_at）。
+    人脈管理也看不到，但可從垃圾桶救回。
+    """
+    ref = db.collection("people").document(person_id)
+    snap = ref.get()
+    if not snap.exists:
+        return None
+    person = snap.to_dict() or {}
+    if not is_admin and person.get("created_by") != email:
+        return False
+    ref.update({
+        "deleted_at": server_timestamp_fn(),
+        "updated_at": server_timestamp_fn(),
+    })
     return True

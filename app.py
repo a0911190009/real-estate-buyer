@@ -728,8 +728,9 @@ def _recalc_last_contact(db, person_id):
 
 @app.route("/api/buyers/<buyer_id>", methods=["DELETE"])
 def api_buyer_delete(buyer_id):
-    """『刪除買方』 = 把 roles/buyer archive，並從 active_roles 移除 'buyer'。
-    主檔（人脈管理）保留，互動記事與附件不動。
+    """刪除買方。Query: mode=tag_only（預設，只撕標籤）或 mode=full（連人脈一起刪）。
+    - tag_only：archive roles/buyer + active_roles 移除 buyer，人脈仍保留
+    - full：軟刪除整個 person（人脈管理也看不到，可從垃圾桶救回）
     """
     email, err = _require_user()
     if err:
@@ -737,13 +738,19 @@ def api_buyer_delete(buyer_id):
     db = _get_db()
     if db is None:
         return jsonify({"error": "Firestore 未連線"}), 503
+    mode = (request.args.get("mode") or "tag_only").strip()
     try:
-        result = buyer_facade.archive_buyer(db, buyer_id, email, _is_admin(email), _server_ts)
+        if mode == "full":
+            # 連人脈一起刪
+            result = buyer_facade.soft_delete_person(db, buyer_id, email, _is_admin(email), _server_ts)
+        else:
+            # 預設只撕標籤
+            result = buyer_facade.archive_buyer(db, buyer_id, email, _is_admin(email), _server_ts)
         if result is None:
             return jsonify({"error": "找不到此買方"}), 404
         if result is False:
             return jsonify({"error": "無權限"}), 403
-        return jsonify({"ok": True})
+        return jsonify({"ok": True, "mode": mode})
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
@@ -3020,11 +3027,20 @@ function buyerSave() {
 }
 
 function buyerDelete(id, name) {
-  if (!confirm('確定刪除「' + name + '」？帶看紀錄與互動記事也會一併刪除。')) return;
-  fetch('/api/buyers/' + id, {method:'DELETE'})
+  // 兩階段詢問：1) 確認刪除  2) 撕標籤 vs 連人脈一起刪
+  if (!confirm('確定要刪除「' + name + '」？')) return;
+  // 用 prompt 簡單方式問模式（之後可改 modal 美化）
+  var msg = '請選擇刪除方式：\n\n'
+          + '1 = 只撕去買方標籤（人脈管理仍保留此人）\n'
+          + '2 = 連人脈管理也一起刪（可從人脈垃圾桶救回）\n\n'
+          + '輸入 1 或 2：';
+  var mode = prompt(msg, '1');
+  if (mode !== '1' && mode !== '2') return;
+  var modeParam = (mode === '2') ? 'full' : 'tag_only';
+  fetch('/api/buyers/' + id + '?mode=' + modeParam, {method:'DELETE'})
     .then(r => r.json()).then(d => {
       if (d.error) { toast(d.error, 'error'); return; }
-      toast('已刪除', 'success');
+      toast(modeParam === 'full' ? '已從人脈刪除' : '已撕去買方標籤（人脈仍保留）', 'success');
       buyerLoad();
     });
 }
